@@ -10,6 +10,14 @@ const Skeleton = () => (
   </div>
 );
 
+function photoUrl(path) {
+  return `/api/uploads/${path}`;
+}
+
+function thumbnailUrl(path) {
+  return `/api/thumbnails/${path}`;
+}
+
 export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún' }) {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,7 +33,7 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
       const url = `${fetchUrl}${fetchUrl.includes('?') ? '&' : '?'}offset=${currentOffset}&limit=12`;
       const res = await fetch(url);
       const data = await res.json();
-      const items = data.items || data.photos || data || [];
+      const items = Array.isArray(data) ? data : (data.items || data.photos || []);
       if (append) {
         setPhotos((prev) => [...prev, ...items]);
       } else {
@@ -77,25 +85,25 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
         {photos.map((photo, idx) => (
           <div key={photo.id || idx} className="rounded-xl overflow-hidden shadow-sm bg-white photo-enter">
             <img
-              src={photo.thumbnail_url || photo.url}
+              src={thumbnailUrl(photo.thumbnail_path)}
               alt="Foto"
               className="aspect-square object-cover w-full"
               loading="lazy"
             />
             <div className="p-2 space-y-1">
               <div className="flex items-center gap-2">
-                {photo.user_photo && (
-                  <img src={photo.user_photo} alt="" className="w-5 h-5 rounded-full object-cover" />
+                {photo.user_google_photo && (
+                  <img src={photo.user_google_photo} alt="" className="w-5 h-5 rounded-full object-cover" />
                 )}
                 <span className="text-xs font-medium truncate">
-                  {photo.user_name || photo.user_alias || 'Anónimo'}
+                  {photo.user_google_name || photo.user_alias || 'Anónimo'}
                 </span>
               </div>
               {photo.message && (
                 <p className="text-xs text-gray-500 truncate">{photo.message}</p>
               )}
               <a
-                href={photo.url || photo.download_url}
+                href={`/api/gallery/${photo.id}/download`}
                 download
                 className="text-xs text-[var(--color-accent)] hover:underline inline-block"
               >

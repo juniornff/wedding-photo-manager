@@ -23,10 +23,15 @@ export default function PhotoUpload({ uploadUrl, onSuccess }) {
 
   const handleUpload = async () => {
     if (!file || !user) return;
+    if (!user.id) {
+      showNotification('Debes iniciar sesión primero', 'error');
+      return;
+    }
     setUploading(true);
     try {
       const fd = new FormData();
       fd.append('file', file);
+      fd.append('user_id', user.id);
       if (message.trim()) fd.append('message', message.trim());
       const res = await fetch(uploadUrl, { method: 'POST', body: fd });
       if (!res.ok) {

@@ -3,6 +3,12 @@ import PhotoGrid from '../components/PhotoGrid';
 import PhotoUpload from '../components/PhotoUpload';
 import { useSSE } from '../context/SSEContext';
 
+function carouselThumbUrl(photo) {
+  if (photo.thumbnail_path) return `/api/thumbnails/${photo.thumbnail_path}`;
+  if (photo.path) return `/api/uploads/${photo.path}`;
+  return '';
+}
+
 export default function MainPage() {
   const [info, setInfo] = useState(null);
   const [carousel, setCarousel] = useState([]);
@@ -15,7 +21,7 @@ export default function MainPage() {
       .catch(() => {});
     fetch('/api/carousel')
       .then((r) => r.json())
-      .then((data) => setCarousel(data.items || data.photos || data || []))
+      .then(setCarousel)
       .catch(() => {});
   }, []);
 
@@ -37,9 +43,9 @@ export default function MainPage() {
           style={{ backgroundColor: 'var(--color-secondary)' }}
         >
           <h1 className="text-3xl md:text-5xl font-bold mb-2">
-            {info.couple_name1} & {info.couple_name2}
+            {info.novio1_name} & {info.novio2_name}
           </h1>
-          <p className="text-lg opacity-80">{info.date}</p>
+          <p className="text-lg opacity-80">{info.wedding_date}</p>
         </section>
       )}
 
@@ -50,7 +56,7 @@ export default function MainPage() {
             {carousel.map((photo, idx) => (
               <div key={photo.id || idx} className="snap-start shrink-0">
                 <img
-                  src={photo.thumbnail_url || photo.url}
+                  src={carouselThumbUrl(photo)}
                   alt=""
                   className="h-48 md:h-64 rounded-xl object-cover shadow-sm"
                 />

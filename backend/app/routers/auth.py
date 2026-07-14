@@ -12,7 +12,7 @@ from app.schemas.schemas import GuestCreate, UserResponse, AdminLogin
 from app.services.auth_service import create_guest, verify_password, hash_password
 from app.config import settings
 
-auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
+auth_router = APIRouter(prefix="/api", tags=["auth"])
 
 oauth = OAuth()
 oauth.register(
@@ -27,6 +27,20 @@ oauth.register(
 @auth_router.post("/guest", response_model=UserResponse, status_code=201)
 async def register_guest(body: GuestCreate, db: AsyncSession = Depends(get_db)):
     user = await create_guest(db, body.alias)
+    return user
+
+
+@auth_router.get("/guest/me", response_model=UserResponse)
+async def get_current_guest(
+    user_id: int | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Usuario no identificado.")
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
     return user
 
 

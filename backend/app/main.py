@@ -2,8 +2,11 @@ import asyncio
 import os
 from contextlib import asynccontextmanager
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import select
 
@@ -87,3 +90,9 @@ app.include_router(main_router)
 app.include_router(secret_router)
 app.include_router(admin_router)
 app.include_router(sse_router)
+
+# Serve uploaded photos and thumbnails via /api/media/...
+Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+Path(settings.THUMBNAILS_DIR).mkdir(parents=True, exist_ok=True)
+app.mount("/api/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+app.mount("/api/thumbnails", StaticFiles(directory=settings.THUMBNAILS_DIR), name="thumbnails")

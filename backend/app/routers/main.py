@@ -8,12 +8,13 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.models import WeddingInfo, GalleryPhoto, User
+from app.models.models import WeddingInfo, GalleryPhoto, CarouselPhoto, User
 from app.schemas.schemas import (
     WeddingInfoResponse,
     GalleryPhotoResponse,
     GalleryUploadResponse,
     BatchDownloadRequest,
+    CarouselPhotoResponse,
 )
 from app.services.photo_service import (
     validate_file,
@@ -34,6 +35,14 @@ async def get_wedding_info(db: AsyncSession = Depends(get_db)):
     if not info:
         raise HTTPException(status_code=404, detail="Información de la boda no encontrada.")
     return info
+
+
+@main_router.get("/carousel", response_model=list[CarouselPhotoResponse])
+async def get_carousel(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(CarouselPhoto).order_by(CarouselPhoto.sort_order, CarouselPhoto.uploaded_at)
+    )
+    return result.scalars().all()
 
 
 @main_router.get("/gallery", response_model=list[GalleryPhotoResponse])

@@ -3,10 +3,16 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 
 export default function Navbar() {
-  const { user, login, logout, isAdmin } = useAuth();
+  const { user, loading, login, logout, isAdmin } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
   const [alias, setAlias] = useState('');
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!loading && !user) {
+      setShowLogin(true);
+    }
+  }, [loading, user]);
 
   const handleLogin = async (e) => {
     e.preventDefault();

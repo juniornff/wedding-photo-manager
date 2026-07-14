@@ -13,15 +13,23 @@ export function AuthProvider({ children }) {
       setLoading(false);
       return;
     }
-    try {
-      const data = await api('/api/guest/me');
-      setUser(data);
-    } catch {
-      localStorage.removeItem('wedding_uuid');
-      localStorage.removeItem('wedding_alias');
-    } finally {
-      setLoading(false);
+    const storedId = localStorage.getItem('wedding_user_id');
+    if (storedId) {
+      try {
+        const data = await api(`/api/guest/me?user_id=${storedId}`);
+        setUser(data);
+      } catch {
+        const alias = localStorage.getItem('wedding_alias');
+        setUser({ id: parseInt(storedId), uuid, alias,
+          google_name: localStorage.getItem('wedding_google_name'),
+          google_photo: localStorage.getItem('wedding_google_photo'),
+        });
+      }
+    } else {
+      const alias = localStorage.getItem('wedding_alias');
+      setUser({ uuid, alias });
     }
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -34,18 +42,24 @@ export function AuthProvider({ children }) {
       body: JSON.stringify({ alias }),
     });
     localStorage.setItem('wedding_uuid', data.uuid);
+    localStorage.setItem('wedding_user_id', data.id);
     localStorage.setItem('wedding_alias', alias);
+    if (data.google_name) localStorage.setItem('wedding_google_name', data.google_name);
+    if (data.google_photo) localStorage.setItem('wedding_google_photo', data.google_photo);
     setUser(data);
     return data;
   };
 
   const logout = () => {
     localStorage.removeItem('wedding_uuid');
+    localStorage.removeItem('wedding_user_id');
     localStorage.removeItem('wedding_alias');
+    localStorage.removeItem('wedding_google_name');
+    localStorage.removeItem('wedding_google_photo');
     setUser(null);
   };
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = Boolean(localStorage.getItem('wedding_is_admin')) || user?.role === 'admin';
 
   return (
     <AuthContext.Provider value={{ user, loading, login, logout, checkSession, isAdmin }}>
