@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../api';
+import { apiUpload } from '../api';
 
 export default function PhotoUpload({ uploadUrl, onSuccess }) {
   const { user } = useAuth();
@@ -33,12 +33,7 @@ export default function PhotoUpload({ uploadUrl, onSuccess }) {
       fd.append('file', file);
       fd.append('user_id', user.id);
       if (message.trim()) fd.append('message', message.trim());
-      const res = await fetch(uploadUrl, { method: 'POST', body: fd });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Error al subir');
-      }
-      const data = await res.json();
+      const data = await apiUpload(uploadUrl, fd);
       showNotification('¡Foto subida con éxito!');
       setOpen(false);
       setFile(null);

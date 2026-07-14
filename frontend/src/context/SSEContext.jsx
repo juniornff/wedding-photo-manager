@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useAuth } from './AuthContext';
+import { API_BASE } from '../api';
 
 const SSEContext = createContext(null);
 
@@ -17,7 +18,7 @@ export function SSEProvider({ children }) {
 
     function connect() {
       if (esRef.current) esRef.current.close();
-      const es = new EventSource('/api/events');
+      const es = new EventSource(`${API_BASE}/api/events`);
       esRef.current = es;
 
       es.onmessage = (e) => {

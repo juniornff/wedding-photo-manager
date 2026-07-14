@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import PhotoUpload from '../components/PhotoUpload';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../api';
 
 export default function FotografoSecretoPage() {
   const { qr_code } = useParams();
@@ -12,11 +13,7 @@ export default function FotografoSecretoPage() {
   const [selectedChallenge, setSelectedChallenge] = useState(null);
 
   useEffect(() => {
-    fetch(`/api/secret-photographer/table/${qr_code}`)
-      .then((r) => {
-        if (!r.ok) throw new Error('Mesa no encontrada');
-        return r.json();
-      })
+    api(`/api/secret-photographer/table/${qr_code}`)
       .then((data) => {
         setTable(data.table || data);
         setChallenges(data.challenges || []);
@@ -102,8 +99,7 @@ export default function FotografoSecretoPage() {
               <PhotoUpload
                 uploadUrl={`/api/secret-photographer/upload?challenge_id=${selectedChallenge.id}`}
                 onSuccess={() => {
-                  fetch(`/api/secret-photographer/table/${qr_code}`)
-                    .then((r) => r.json())
+                  api(`/api/secret-photographer/table/${qr_code}`)
                     .then((data) => {
                       setChallenges(data.challenges || []);
                       const updated = (data.challenges || []).find((c) => c.id === selectedChallenge.id);

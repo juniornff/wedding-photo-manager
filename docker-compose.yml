@@ -6,7 +6,7 @@ services:
     volumes:
       - ./Fotos:/app/Fotos
       - ./Miniaturas:/app/Miniaturas
-      - ./wedding.db:/app/wedding.db
+      - .:/app/host
       - ./.env:/app/.env
     environment:
       - PYTHONUNBUFFERED=1
@@ -15,9 +15,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://localhost:8000
     ports:
       - "5173:5173"
     depends_on:
       - backend
-    environment:
-      - VITE_API_URL=http://localhost:8000

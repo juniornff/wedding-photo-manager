@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import PhotoGrid from '../components/PhotoGrid';
 import PhotoUpload from '../components/PhotoUpload';
 import { useSSE } from '../context/SSEContext';
+import { API_BASE, api } from '../api';
 
 function carouselThumbUrl(photo) {
-  if (photo.thumbnail_path) return `/api/thumbnails/${photo.thumbnail_path}`;
-  if (photo.path) return `/api/uploads/${photo.path}`;
+  if (photo.thumbnail_path) return `${API_BASE}/api/thumbnails/${photo.thumbnail_path}`;
+  if (photo.path) return `${API_BASE}/api/uploads/${photo.path}`;
   return '';
 }
 
@@ -15,19 +16,17 @@ export default function MainPage() {
   const { lastEvent } = useSSE();
 
   useEffect(() => {
-    fetch('/api/wedding-info')
-      .then((r) => r.json())
-      .then(setInfo)
-      .catch(() => {});
-    fetch('/api/carousel')
-      .then((r) => r.json())
-      .then(setCarousel)
-      .catch(() => {});
+    api('/api/wedding-info').then(setInfo).catch(() => {});
+    api('/api/carousel').then(setCarousel).catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (lastEvent?.type === 'info_updated' && lastEvent.data) {
+    if (!lastEvent) return;
+    if (lastEvent.type === 'info_updated' && lastEvent.data) {
       setInfo(lastEvent.data);
+    }
+    if (lastEvent.type === 'new_photo') {
+      window.dispatchEvent(new CustomEvent('refresh-gallery'));
     }
   }, [lastEvent]);
 

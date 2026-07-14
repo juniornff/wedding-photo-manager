@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { API_BASE } from '../api';
 
 const Skeleton = () => (
   <div className="rounded-xl overflow-hidden shadow-sm">
@@ -11,11 +12,11 @@ const Skeleton = () => (
 );
 
 function photoUrl(path) {
-  return `/api/uploads/${path}`;
+  return `${API_BASE}/api/uploads/${path}`;
 }
 
 function thumbnailUrl(path) {
-  return `/api/thumbnails/${path}`;
+  return `${API_BASE}/api/thumbnails/${path}`;
 }
 
 export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún' }) {
@@ -31,7 +32,7 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
     else setLoadingMore(true);
     try {
       const url = `${fetchUrl}${fetchUrl.includes('?') ? '&' : '?'}offset=${currentOffset}&limit=12`;
-      const res = await fetch(url);
+      const res = await fetch(`${API_BASE}${url}`);
       const data = await res.json();
       const items = Array.isArray(data) ? data : (data.items || data.photos || []);
       if (append) {
@@ -51,6 +52,15 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
 
   useEffect(() => {
     fetchPhotos(0, false);
+  }, [fetchPhotos]);
+
+  useEffect(() => {
+    const handler = () => {
+      setHasMore(true);
+      fetchPhotos(0, false);
+    };
+    window.addEventListener('refresh-gallery', handler);
+    return () => window.removeEventListener('refresh-gallery', handler);
   }, [fetchPhotos]);
 
   useEffect(() => {
@@ -103,7 +113,7 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
                 <p className="text-xs text-gray-500 truncate">{photo.message}</p>
               )}
               <a
-                href={`/api/gallery/${photo.id}/download`}
+                href={`${API_BASE}/api/gallery/${photo.id}/download`}
                 download
                 className="text-xs text-[var(--color-accent)] hover:underline inline-block"
               >

@@ -20,7 +20,7 @@ function TabButton({ active, onClick, children }) {
 function DashboardTab() {
   const [stats, setStats] = useState(null);
   useEffect(() => {
-    api('/api/admin/stats').then(setStats).catch(() => {});
+    api('/api/admin/dashboard').then(setStats).catch(() => {});
   }, []);
   if (!stats) return <p className="text-gray-400">Cargando...</p>;
   return (
@@ -45,10 +45,7 @@ function WeddingInfoTab() {
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
-    fetch('/api/wedding-info')
-      .then((r) => r.json())
-      .then((data) => setForm(data))
-      .catch(() => {});
+    api('/api/wedding-info').then(setForm).catch(() => {});
   }, []);
 
   const handleSave = async () => {
@@ -93,8 +90,7 @@ function CarouselTab() {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    fetch('/api/carousel')
-      .then((r) => r.json())
+    api('/api/carousel')
       .then((data) => setPhotos(data.items || data.photos || data || []))
       .catch(() => {});
   }, []);
@@ -130,8 +126,7 @@ function CarouselTab() {
         method: 'PUT',
         body: JSON.stringify({ direction }),
       });
-      const res = await fetch('/api/carousel');
-      const data = await res.json();
+      const data = await api('/api/carousel');
       setPhotos(data.items || data.photos || data || []);
     } catch (err) {
       alert(err.message);
@@ -325,8 +320,7 @@ function GalleryTab() {
   const [photos, setPhotos] = useState([]);
 
   useEffect(() => {
-    fetch('/api/gallery?offset=0&limit=50')
-      .then((r) => r.json())
+    api('/api/gallery?offset=0&limit=50')
       .then((data) => setPhotos(data.items || data.photos || data || []))
       .catch(() => {});
   }, []);
