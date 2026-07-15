@@ -6,7 +6,7 @@ services:
     volumes:
       - ./Fotos:/app/Fotos
       - ./Miniaturas:/app/Miniaturas
-      - .:/app/host
+      - wedding_data:/app/data
       - ./.env:/app/.env
     environment:
       - PYTHONUNBUFFERED=1
@@ -21,3 +21,6 @@ services:
       - "5173:5173"
     depends_on:
       - backend
+
+volumes:
+  wedding_data:

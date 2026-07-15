@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "sqlite+aiosqlite:///./host/wedding.db"
+    DATABASE_URL: str = "sqlite+aiosqlite:///./data/wedding.db"
     UPLOAD_DIR: str = "Fotos"
     THUMBNAILS_DIR: str = "Miniaturas"
     ADMIN_EMAIL: str = ""
