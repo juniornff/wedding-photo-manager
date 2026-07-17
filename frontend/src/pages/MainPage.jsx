@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import PhotoGrid from '../components/PhotoGrid';
 import PhotoUpload from '../components/PhotoUpload';
 import { useSSE } from '../context/SSEContext';
 import { API_BASE, api } from '../api';
 
-function carouselThumbUrl(photo) {
-  if (photo.thumbnail_path) return `${API_BASE}/api/thumbnails/${photo.thumbnail_path}`;
+function photoUrl(photo) {
   if (photo.path) return `${API_BASE}/api/uploads/${photo.path}`;
   return '';
 }
@@ -13,17 +12,39 @@ function carouselThumbUrl(photo) {
 export default function MainPage() {
   const [info, setInfo] = useState(null);
   const [carousel, setCarousel] = useState([]);
+  const [carouselIdx, setCarouselIdx] = useState(0);
+  const intervalRef = useRef(null);
   const { lastEvent } = useSSE();
 
   useEffect(() => {
-    api('/api/wedding-info').then(setInfo).catch(() => {});
+    api('/api/wedding-info').then((data) => {
+      setInfo(data);
+      if (data.color_scheme) {
+        const colors = data.color_scheme.split(',').map((c) => c.trim());
+        if (colors[0]) document.documentElement.style.setProperty('--color-primary', colors[0]);
+        if (colors[1]) document.documentElement.style.setProperty('--color-secondary', colors[1]);
+      }
+    }).catch(() => {});
     api('/api/carousel').then(setCarousel).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (carousel.length === 0) return;
+    const interval = (info?.carousel_interval || 5) * 1000;
+    const id = setInterval(() => {
+      setCarouselIdx((prev) => (prev + 1) % carousel.length);
+    }, interval);
+    intervalRef.current = id;
+    return () => clearInterval(id);
+  }, [carousel.length, info?.carousel_interval]);
 
   useEffect(() => {
     if (!lastEvent) return;
     if (lastEvent.type === 'info_updated' && lastEvent.data) {
       setInfo(lastEvent.data);
+    }
+    if (lastEvent.type === 'carousel_updated') {
+      api('/api/carousel').then(setCarousel).catch(() => {});
     }
     if (lastEvent.type === 'new_photo') {
       window.dispatchEvent(new CustomEvent('refresh-gallery'));
@@ -37,30 +58,39 @@ export default function MainPage() {
   return (
     <div className="min-h-screen">
       {info && (
-        <section
-          className="text-center py-10 px-4"
-          style={{ backgroundColor: 'var(--color-secondary)' }}
-        >
-          <h1 className="text-3xl md:text-5xl font-bold mb-2">
-            {info.novio1_name} & {info.novio2_name}
-          </h1>
-          <p className="text-lg opacity-80">{info.wedding_date}</p>
-        </section>
-      )}
-
-      {carousel.length > 0 && (
-        <section className="py-6 px-4">
-          <h2 className="text-lg font-semibold mb-3 px-1">Galería de momentos</h2>
-          <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-none">
-            {carousel.map((photo, idx) => (
-              <div key={photo.id || idx} className="snap-start shrink-0">
-                <img
-                  src={carouselThumbUrl(photo)}
-                  alt=""
-                  className="h-48 md:h-64 rounded-xl object-cover shadow-sm"
-                />
-              </div>
-            ))}
+        <section className="relative overflow-hidden">
+          {carousel.length > 0 && (
+            <div className="absolute inset-0">
+              {carousel.map((photo, idx) => (
+                <div
+                  key={photo.id}
+                  className="absolute inset-0 transition-opacity duration-1000"
+                  style={{ opacity: idx === carouselIdx ? 1 : 0 }}
+                >
+                  <img
+                    src={photoUrl(photo)}
+                    alt=""
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          <div
+            className="relative z-10 flex flex-col items-center justify-center text-center px-4 min-h-[45vh] md:min-h-[70vh]"
+            style={{ backgroundColor: carousel.length > 0 ? 'transparent' : 'var(--color-secondary)' }}
+          >
+            <div className="bg-black/50 rounded-xl p-6 md:p-8 backdrop-blur-sm inline-block">
+              <h1 className="text-3xl md:text-5xl font-bold mb-2 text-white">
+                {info.novio1_name} & {info.novio2_name}
+              </h1>
+              <p className="text-lg text-white/90">{info.wedding_date}</p>
+              {info.winner_table_name && (
+                <p className="mt-4 text-lg font-semibold text-green-300">
+                  Mesa ganadora: {info.winner_table_name}
+                </p>
+              )}
+            </div>
           </div>
         </section>
       )}

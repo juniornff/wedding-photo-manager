@@ -2,9 +2,9 @@ import os
 import uuid
 
 import qrcode
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import FileResponse
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -40,6 +40,35 @@ from app.config import settings
 admin_router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
 
+@admin_router.get("/me")
+async def admin_me(request: Request, db: AsyncSession = Depends(get_db)):
+    email = request.session.get("admin_email")
+    if email != settings.ADMIN_EMAIL:
+        raise HTTPException(status_code=401, detail="No autorizado.")
+
+    google_id_tag = f"admin:{email}"
+    result = await db.execute(select(User).where(User.google_id == google_id_tag))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        user = User(
+            uuid=str(uuid.uuid4()),
+            alias="Admin",
+            google_id=google_id_tag,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+    return {
+        "email": email,
+        "is_admin": True,
+        "user_id": user.id,
+        "uuid": user.uuid,
+        "alias": user.alias,
+    }
+
+
 @admin_router.put("/wedding-info", response_model=WeddingInfoResponse)
 async def update_wedding_info(
     body: WeddingInfoUpdate,
@@ -58,6 +87,8 @@ async def update_wedding_info(
         info.wedding_date = body.wedding_date
     if body.color_scheme is not None:
         info.color_scheme = body.color_scheme
+    if body.carousel_interval is not None:
+        info.carousel_interval = body.carousel_interval
 
     await db.commit()
     await db.refresh(info)
@@ -144,7 +175,21 @@ async def delete_gallery_photo(photo_id: int, db: AsyncSession = Depends(get_db)
 @admin_router.get("/tables", response_model=list[TableResponse])
 async def list_tables(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Table).order_by(Table.name))
-    return result.scalars().all()
+    tables = result.scalars().all()
+    responses = []
+    for t in tables:
+        table_dir = f"Fotografo-Secreto/Mesa-{t.id:02d}"
+        abs_dir = os.path.join(settings.UPLOAD_DIR, table_dir)
+        qr_abs_path = os.path.join(abs_dir, "QR.png")
+        qr_url = f"/api/uploads/{table_dir}/QR.png" if os.path.exists(qr_abs_path) else None
+        responses.append(TableResponse(
+            id=t.id,
+            name=t.name,
+            qr_code=t.qr_code,
+            qr_url=qr_url,
+            created_at=t.created_at,
+        ))
+    return responses
 
 
 @admin_router.post("/tables", response_model=TableResponse, status_code=201)
@@ -164,7 +209,14 @@ async def create_table(body: TableCreate, db: AsyncSession = Depends(get_db)):
     qr_path = os.path.join(abs_dir, "QR.png")
     qr_img.save(qr_path)
 
-    return table
+    qr_url = f"/api/uploads/{table_dir}/QR.png"
+    return TableResponse(
+        id=table.id,
+        name=table.name,
+        qr_code=table.qr_code,
+        qr_url=qr_url,
+        created_at=table.created_at,
+    )
 
 
 @admin_router.put("/tables/{table_id}", response_model=TableResponse)
@@ -224,7 +276,31 @@ async def list_challenges(table_id: int | None = None, db: AsyncSession = Depend
     if table_id is not None:
         query = query.where(Challenge.table_id == table_id)
     result = await db.execute(query)
-    return result.scalars().all()
+    challenges = result.scalars().all()
+
+    responses = []
+    for c in challenges:
+        photo_count_result = await db.execute(
+            select(func.count(ChallengePhoto.id)).where(ChallengePhoto.challenge_id == c.id)
+        )
+        photo_count = photo_count_result.scalar() or 0
+
+        user_count_result = await db.execute(
+            select(func.count(User.id)).where(User.table_id == c.table_id)
+        )
+        max_photos = user_count_result.scalar() or 0
+
+        responses.append(ChallengeResponse(
+            id=c.id,
+            table_id=c.table_id,
+            description=c.description,
+            sort_order=c.sort_order,
+            photo_count=photo_count,
+            max_photos=max_photos,
+            locked=c.locked if c.locked is not None else False,
+            created_at=c.created_at,
+        ))
+    return responses
 
 
 @admin_router.post("/challenges", response_model=ChallengeResponse, status_code=201)
@@ -259,6 +335,38 @@ async def update_challenge(
     await db.commit()
     await db.refresh(challenge)
     return challenge
+
+
+@admin_router.put("/challenges/{challenge_id}/unlock", response_model=ChallengeResponse)
+async def unlock_challenge(challenge_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Challenge).where(Challenge.id == challenge_id))
+    challenge = result.scalar_one_or_none()
+    if not challenge:
+        raise HTTPException(status_code=404, detail="Reto no encontrado.")
+    challenge.locked = True
+    await db.commit()
+    await db.refresh(challenge)
+
+    photo_count_result = await db.execute(
+        select(func.count(ChallengePhoto.id)).where(ChallengePhoto.challenge_id == challenge.id)
+    )
+    photo_count = photo_count_result.scalar() or 0
+
+    user_count_result = await db.execute(
+        select(func.count(User.id)).where(User.table_id == challenge.table_id)
+    )
+    max_photos = user_count_result.scalar() or 0
+
+    return ChallengeResponse(
+        id=challenge.id,
+        table_id=challenge.table_id,
+        description=challenge.description,
+        sort_order=challenge.sort_order,
+        photo_count=photo_count,
+        max_photos=max_photos,
+        locked=challenge.locked,
+        created_at=challenge.created_at,
+    )
 
 
 @admin_router.delete("/challenges/{challenge_id}", status_code=204)
@@ -339,6 +447,21 @@ async def select_winner(table_id: int, db: AsyncSession = Depends(get_db)):
 
     await sse_manager.broadcast("winner_selected", {"table_id": table_id})
     return {"message": "Ganador seleccionado.", "table_id": table_id}
+
+
+@admin_router.get("/tables/{table_id}/qr")
+async def get_table_qr(table_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Table).where(Table.id == table_id))
+    table = result.scalar_one_or_none()
+    if not table:
+        raise HTTPException(status_code=404, detail="Mesa no encontrada.")
+
+    table_dir = f"Fotografo-Secreto/Mesa-{table.id:02d}"
+    qr_path = os.path.join(settings.UPLOAD_DIR, table_dir, "QR.png")
+    if not os.path.exists(qr_path):
+        raise HTTPException(status_code=404, detail="QR no encontrado.")
+
+    return FileResponse(qr_path, media_type="image/png", filename=f"QR-Mesa-{table.id:02d}.png")
 
 
 @admin_router.get("/dashboard", response_model=DashboardResponse)

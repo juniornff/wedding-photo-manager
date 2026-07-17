@@ -23,7 +23,9 @@ class WeddingInfoResponse(BaseModel):
     novio2_name: str
     wedding_date: date
     color_scheme: Optional[str] = None
+    carousel_interval: int = 5
     winner_table_id: Optional[int] = None
+    winner_table_name: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -33,6 +35,7 @@ class WeddingInfoUpdate(BaseModel):
     novio2_name: Optional[str] = None
     wedding_date: Optional[date] = None
     color_scheme: Optional[str] = None
+    carousel_interval: Optional[int] = None
 
 
 class CarouselPhotoResponse(BaseModel):
@@ -89,6 +92,7 @@ class TableResponse(BaseModel):
     id: int
     name: str
     qr_code: str
+    qr_url: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -105,6 +109,9 @@ class ChallengeResponse(BaseModel):
     table_id: int
     description: str
     sort_order: int
+    photo_count: int = 0
+    max_photos: int = 0
+    locked: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}

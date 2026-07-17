@@ -49,11 +49,33 @@ async def get_table_by_qr(
     )
     challenges = result.scalars().all()
 
+    user_count_result = await db.execute(
+        select(func.count(User.id)).where(User.table_id == table.id)
+    )
+    max_photos = user_count_result.scalar() or 0
+
+    challenge_responses = []
+    for c in challenges:
+        photo_count_result = await db.execute(
+            select(func.count(ChallengePhoto.id)).where(ChallengePhoto.challenge_id == c.id)
+        )
+        photo_count = photo_count_result.scalar() or 0
+        challenge_responses.append(ChallengeResponse(
+            id=c.id,
+            table_id=c.table_id,
+            description=c.description,
+            sort_order=c.sort_order,
+            photo_count=photo_count,
+            max_photos=max_photos,
+            locked=c.locked if c.locked is not None else False,
+            created_at=c.created_at,
+        ))
+
     return TableWithChallengesResponse(
         id=table.id,
         name=table.name,
         qr_code=table.qr_code,
-        challenges=[ChallengeResponse.model_validate(c) for c in challenges],
+        challenges=challenge_responses,
     )
 
 
@@ -69,13 +91,20 @@ async def get_challenge(challenge_id: int, db: AsyncSession = Depends(get_db)):
     )
     photo_count = result.scalar() or 0
 
+    user_count_result = await db.execute(
+        select(func.count(User.id)).where(User.table_id == challenge.table_id)
+    )
+    max_photos = user_count_result.scalar() or 0
+
+    blocked = photo_count >= max_photos and not (challenge.locked or False)
+
     return ChallengeDetailResponse(
         id=challenge.id,
         table_id=challenge.table_id,
         description=challenge.description,
         sort_order=challenge.sort_order,
         photo_count=photo_count,
-        blocked=photo_count >= 3,
+        blocked=blocked,
     )
 
 
@@ -119,10 +148,17 @@ async def upload_challenge_photo(
     result = await db.execute(
         select(func.count(ChallengePhoto.id)).where(ChallengePhoto.challenge_id == challenge_id)
     )
-    if (result.scalar() or 0) >= 3:
+    photo_count = result.scalar() or 0
+
+    user_count_result = await db.execute(
+        select(func.count(User.id)).where(User.table_id == challenge.table_id)
+    )
+    max_photos = user_count_result.scalar() or 0
+
+    if photo_count >= max_photos and not (challenge.locked or False):
         raise HTTPException(
             status_code=409,
-            detail="Este reto ya tiene las 3 fotos permitidas."
+            detail=f"Este reto ya tiene el máximo de fotos permitidas ({max_photos})."
         )
 
     validate_file(file)

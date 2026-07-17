@@ -111,6 +111,16 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
     return RedirectResponse(url=settings.FRONTEND_URL)
 
 
+@auth_router.post("/admin/login")
+async def admin_login(body: AdminLogin, request: Request, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Admin).where(Admin.email == body.email))
+    admin = result.scalar_one_or_none()
+    if not admin or not verify_password(body.password, admin.password_hash):
+        raise HTTPException(status_code=401, detail="Credenciales inválidas.")
+    request.session["admin_email"] = body.email
+    return {"message": "Login exitoso", "email": body.email}
+
+
 @auth_router.post("/logout")
 async def logout(request: Request):
     request.session.clear()

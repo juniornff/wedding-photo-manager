@@ -1,13 +1,42 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { api } from '../api';
+import { api, API_BASE } from '../api';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const checkSession = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/me`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.is_admin) {
+          localStorage.setItem('wedding_is_admin', 'true');
+          setIsAdmin(true);
+          if (data.user_id) {
+            localStorage.setItem('wedding_uuid', data.uuid);
+            localStorage.setItem('wedding_user_id', data.user_id);
+            localStorage.setItem('wedding_alias', data.alias);
+            setUser({ id: data.user_id, uuid: data.uuid, alias: data.alias });
+            setLoading(false);
+            return;
+          }
+        } else {
+          localStorage.removeItem('wedding_is_admin');
+          setIsAdmin(false);
+        }
+      } else {
+        localStorage.removeItem('wedding_is_admin');
+        setIsAdmin(false);
+      }
+    } catch {
+      localStorage.removeItem('wedding_is_admin');
+      setIsAdmin(false);
+    }
+
     const uuid = localStorage.getItem('wedding_uuid');
     if (!uuid) {
       setLoading(false);
@@ -51,15 +80,16 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    fetch(`${API_BASE}/api/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
     localStorage.removeItem('wedding_uuid');
     localStorage.removeItem('wedding_user_id');
     localStorage.removeItem('wedding_alias');
     localStorage.removeItem('wedding_google_name');
     localStorage.removeItem('wedding_google_photo');
+    localStorage.removeItem('wedding_is_admin');
     setUser(null);
+    setIsAdmin(false);
   };
-
-  const isAdmin = Boolean(localStorage.getItem('wedding_is_admin')) || user?.role === 'admin';
 
   return (
     <AuthContext.Provider value={{ user, loading, login, logout, checkSession, isAdmin }}>

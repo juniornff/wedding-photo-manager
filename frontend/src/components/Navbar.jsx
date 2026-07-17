@@ -9,10 +9,10 @@ export default function Navbar() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !user && !isAdmin) {
       setShowLogin(true);
     }
-  }, [loading, user]);
+  }, [loading, user, isAdmin]);
 
   useEffect(() => {
     const handler = () => setShowLogin(true);
@@ -41,14 +41,14 @@ export default function Navbar() {
         </a>
 
         <div className="flex items-center gap-3">
-          {user ? (
+          {(user || isAdmin) ? (
             <>
               <div className="flex items-center gap-2">
-                {user.google_photo && (
+                {user?.google_photo && (
                   <img src={user.google_photo} alt="" className="w-7 h-7 rounded-full object-cover" />
                 )}
                 <span className="text-sm font-medium truncate max-w-28">
-                  {user.google_name || user.alias}
+                  {user?.google_name || user?.alias || 'Admin'}
                 </span>
               </div>
               {isAdmin && (
@@ -78,7 +78,7 @@ export default function Navbar() {
       </div>
 
       {showLogin && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowLogin(false)}>
+        <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 px-4 pt-[15vh]" onClick={() => setShowLogin(false)}>
           <div
             className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl"
             onClick={(e) => e.stopPropagation()}
@@ -102,6 +102,15 @@ export default function Navbar() {
                 Entrar
               </button>
             </form>
+            <div className="mt-3 text-center">
+              <span className="text-xs text-gray-400">o</span>
+            </div>
+            <a
+              href="/api/google"
+              className="mt-3 w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-gray-300 text-sm font-medium hover:bg-gray-50 transition"
+            >
+              Iniciar sesión con Google
+            </a>
           </div>
         </div>
       )}

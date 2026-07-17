@@ -8,7 +8,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.models import WeddingInfo, GalleryPhoto, CarouselPhoto, User
+from app.models.models import WeddingInfo, GalleryPhoto, CarouselPhoto, User, Table
 from app.schemas.schemas import (
     WeddingInfoResponse,
     GalleryPhotoResponse,
@@ -34,7 +34,23 @@ async def get_wedding_info(db: AsyncSession = Depends(get_db)):
     info = result.scalar_one_or_none()
     if not info:
         raise HTTPException(status_code=404, detail="Información de la boda no encontrada.")
-    return info
+
+    winner_table_name = None
+    if info.winner_table_id:
+        table_result = await db.execute(select(Table).where(Table.id == info.winner_table_id))
+        winner_table = table_result.scalar_one_or_none()
+        if winner_table:
+            winner_table_name = winner_table.name
+
+    return WeddingInfoResponse(
+        novio1_name=info.novio1_name,
+        novio2_name=info.novio2_name,
+        wedding_date=info.wedding_date,
+        color_scheme=info.color_scheme,
+        carousel_interval=info.carousel_interval or 5,
+        winner_table_id=info.winner_table_id,
+        winner_table_name=winner_table_name,
+    )
 
 
 @main_router.get("/carousel", response_model=list[CarouselPhotoResponse])

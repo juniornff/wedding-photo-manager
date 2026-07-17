@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Date, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, DateTime, Date, ForeignKey, UniqueConstraint, Boolean
 from sqlalchemy.orm import DeclarativeBase, relationship
 from datetime import datetime, timezone
 
@@ -32,6 +32,7 @@ class WeddingInfo(Base):
     novio2_name = Column(String(200), nullable=False)
     wedding_date = Column(Date, nullable=False)
     color_scheme = Column(Text, nullable=True)
+    carousel_interval = Column(Integer, default=5)
     winner_table_id = Column(Integer, ForeignKey("tables.id"), nullable=True)
     updated_at = Column(
         DateTime,
@@ -84,6 +85,7 @@ class Challenge(Base):
     table_id = Column(Integer, ForeignKey("tables.id"), nullable=False)
     description = Column(String(500), nullable=False)
     sort_order = Column(Integer, default=0)
+    locked = Column(Boolean, default=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     table = relationship("Table", back_populates="challenges")
