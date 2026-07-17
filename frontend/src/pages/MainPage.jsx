@@ -23,6 +23,7 @@ export default function MainPage() {
         const colors = data.color_scheme.split(',').map((c) => c.trim());
         if (colors[0]) document.documentElement.style.setProperty('--color-primary', colors[0]);
         if (colors[1]) document.documentElement.style.setProperty('--color-secondary', colors[1]);
+        if (colors[2]) document.documentElement.style.setProperty('--color-accent', colors[2]);
       }
     }).catch(() => {});
     api('/api/carousel').then(setCarousel).catch(() => {});

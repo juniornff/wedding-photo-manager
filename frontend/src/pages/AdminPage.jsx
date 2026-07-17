@@ -40,17 +40,42 @@ function DashboardTab() {
   );
 }
 
+function ColorField({ label, value, onChange }) {
+  return (
+    <div className="flex items-center gap-3">
+      <label className="text-sm font-medium w-24 shrink-0">{label}</label>
+      <input
+        type="color"
+        value={value || '#000000'}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-10 h-10 rounded cursor-pointer border-0 p-0.5"
+      />
+      <input
+        type="text"
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        className="border rounded-lg p-2 text-sm font-mono flex-1"
+        placeholder="#000000"
+        maxLength={7}
+      />
+    </div>
+  );
+}
+
 function WeddingInfoTab() {
-  const [form, setForm] = useState({ novio1_name: '', novio2_name: '', wedding_date: '', color_scheme: '', carousel_interval: 5 });
+  const [form, setForm] = useState({ novio1_name: '', novio2_name: '', wedding_date: '', color_primary: '', color_secondary: '', color_accent: '', carousel_interval: 5 });
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
     api('/api/wedding-info').then((data) => {
+      const colors = (data.color_scheme || '').split(',').map((c) => c.trim());
       setForm({
         novio1_name: data.novio1_name || '',
         novio2_name: data.novio2_name || '',
         wedding_date: data.wedding_date || '',
-        color_scheme: data.color_scheme || '',
+        color_primary: colors[0] || '',
+        color_secondary: colors[1] || '',
+        color_accent: colors[2] || '',
         carousel_interval: data.carousel_interval ?? 5,
       });
     }).catch(() => {});
@@ -58,13 +83,14 @@ function WeddingInfoTab() {
 
   const handleSave = async () => {
     try {
+      const parts = [form.color_primary, form.color_secondary, form.color_accent].filter(Boolean);
       await api('/api/admin/wedding-info', {
         method: 'PUT',
         body: JSON.stringify({
           novio1_name: form.novio1_name || null,
           novio2_name: form.novio2_name || null,
           wedding_date: form.wedding_date || null,
-          color_scheme: form.color_scheme || null,
+          color_scheme: parts.length > 0 ? parts.join(',') : null,
           carousel_interval: form.carousel_interval || null,
         }),
       });
@@ -76,7 +102,7 @@ function WeddingInfoTab() {
   };
 
   return (
-    <div className="max-w-md space-y-4">
+    <div className="max-w-lg space-y-4">
       <div>
         <label className="block text-sm font-medium mb-1">Nombre del primer contrayente</label>
         <input value={form.novio1_name} onChange={(e) => setForm({ ...form, novio1_name: e.target.value })} className="w-full border rounded-lg p-2 text-sm" />
@@ -89,9 +115,11 @@ function WeddingInfoTab() {
         <label className="block text-sm font-medium mb-1">Fecha</label>
         <input type="date" value={form.wedding_date} onChange={(e) => setForm({ ...form, wedding_date: e.target.value })} className="w-full border rounded-lg p-2 text-sm" />
       </div>
-      <div>
-        <label className="block text-sm font-medium mb-1">Esquema de color (opcional)</label>
-        <input value={form.color_scheme} onChange={(e) => setForm({ ...form, color_scheme: e.target.value })} className="w-full border rounded-lg p-2 text-sm" placeholder="ej: #ff0000,#00ff00" />
+      <div className="space-y-3 pt-2 border-t border-gray-200">
+        <p className="text-sm font-semibold">Esquema de color</p>
+        <ColorField label="Principal" value={form.color_primary} onChange={(v) => setForm({ ...form, color_primary: v })} />
+        <ColorField label="Secundario" value={form.color_secondary} onChange={(v) => setForm({ ...form, color_secondary: v })} />
+        <ColorField label="Terciario" value={form.color_accent} onChange={(v) => setForm({ ...form, color_accent: v })} />
       </div>
       <div>
         <label className="block text-sm font-medium mb-1">Intervalo del carrusel (segundos)</label>
