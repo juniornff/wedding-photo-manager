@@ -14,6 +14,12 @@ export default function Navbar() {
     }
   }, [loading, user]);
 
+  useEffect(() => {
+    const handler = () => setShowLogin(true);
+    window.addEventListener('show-login', handler);
+    return () => window.removeEventListener('show-login', handler);
+  }, []);
+
   const handleLogin = async (e) => {
     e.preventDefault();
     if (!alias.trim()) return;

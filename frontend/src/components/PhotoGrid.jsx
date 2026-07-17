@@ -4,10 +4,6 @@ import { API_BASE } from '../api';
 const Skeleton = () => (
   <div className="rounded-xl overflow-hidden shadow-sm">
     <div className="skeleton aspect-square" />
-    <div className="p-2 space-y-1">
-      <div className="skeleton h-3 w-3/4 rounded" />
-      <div className="skeleton h-2 w-1/2 rounded" />
-    </div>
   </div>
 );
 
@@ -25,6 +21,7 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
   const [loadingMore, setLoadingMore] = useState(false);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [selectedIdx, setSelectedIdx] = useState(null);
   const sentinelRef = useRef(null);
 
   const fetchPhotos = useCallback(async (currentOffset, append = false) => {
@@ -77,6 +74,17 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
     return () => obs.disconnect();
   }, [fetchPhotos, offset, hasMore, loadingMore, loading]);
 
+  useEffect(() => {
+    if (selectedIdx === null) return;
+    const handler = (e) => {
+      if (e.key === 'Escape') setSelectedIdx(null);
+      if (e.key === 'ArrowLeft') setSelectedIdx((i) => (i > 0 ? i - 1 : i));
+      if (e.key === 'ArrowRight') setSelectedIdx((i) => (i < photos.length - 1 ? i + 1 : i));
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectedIdx, photos.length]);
+
   if (loading) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -89,40 +97,91 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
     return <p className="text-center text-gray-400 py-12">{emptyMessage}</p>;
   }
 
+  const selected = selectedIdx !== null ? photos[selectedIdx] : null;
+
   return (
     <div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {photos.map((photo, idx) => (
-          <div key={photo.id || idx} className="rounded-xl overflow-hidden shadow-sm bg-white photo-enter">
+          <button
+            key={photo.id || idx}
+            onClick={() => setSelectedIdx(idx)}
+            className="rounded-xl overflow-hidden shadow-sm bg-white photo-enter cursor-pointer text-left p-0 border-0"
+          >
             <img
               src={thumbnailUrl(photo.thumbnail_path)}
-              alt="Foto"
+              alt={photo.message || 'Foto'}
               className="aspect-square object-cover w-full"
               loading="lazy"
             />
-            <div className="p-2 space-y-1">
-              <div className="flex items-center gap-2">
-                {photo.user_google_photo && (
-                  <img src={photo.user_google_photo} alt="" className="w-5 h-5 rounded-full object-cover" />
-                )}
-                <span className="text-xs font-medium truncate">
-                  {photo.user_google_name || photo.user_alias || 'Anónimo'}
-                </span>
-              </div>
-              {photo.message && (
-                <p className="text-xs text-gray-500 truncate">{photo.message}</p>
+          </button>
+        ))}
+      </div>
+
+      {selected && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          onClick={() => setSelectedIdx(null)}
+        >
+          <div
+            className="relative max-w-3xl w-full max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setSelectedIdx(null)}
+              className="absolute -top-10 right-0 text-white text-2xl hover:opacity-70 cursor-pointer z-10"
+            >
+              &times;
+            </button>
+
+            <div className="relative flex items-center justify-center bg-black/40 rounded-t-xl overflow-hidden min-h-[300px]">
+              {selectedIdx > 0 && (
+                <button
+                  onClick={() => setSelectedIdx(selectedIdx - 1)}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 text-white text-4xl hover:opacity-70 cursor-pointer z-10 px-2"
+                >
+                  ‹
+                </button>
               )}
+              <img
+                src={photoUrl(selected.path)}
+                alt={selected.message || 'Foto'}
+                className="max-w-full max-h-[70vh] object-contain"
+              />
+              {selectedIdx < photos.length - 1 && (
+                <button
+                  onClick={() => setSelectedIdx(selectedIdx + 1)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-white text-4xl hover:opacity-70 cursor-pointer z-10 px-2"
+                >
+                  ›
+                </button>
+              )}
+            </div>
+
+            <div className="bg-white rounded-b-xl p-4 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 min-w-0">
+                {selected.user_google_photo && (
+                  <img src={selected.user_google_photo} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
+                )}
+                <span className="text-sm font-medium truncate">
+                  {selected.user_google_name || selected.user_alias || 'Anónimo'}
+                </span>
+                {selected.message && (
+                  <span className="text-sm text-gray-500 truncate">&mdash; {selected.message}</span>
+                )}
+              </div>
               <a
-                href={`${API_BASE}/api/gallery/${photo.id}/download`}
+                href={`${API_BASE}/api/gallery/${selected.id}/download`}
                 download
-                className="text-xs text-[var(--color-accent)] hover:underline inline-block"
+                className="shrink-0 text-sm px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white hover:brightness-110 transition cursor-pointer"
               >
                 Descargar
               </a>
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
+
       {loadingMore && (
         <div className="flex justify-center py-6">
           <span className="spinner spinner-lg" />

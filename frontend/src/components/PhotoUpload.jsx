@@ -46,10 +46,18 @@ export default function PhotoUpload({ uploadUrl, onSuccess }) {
     }
   };
 
+  const handleOpen = () => {
+    if (!user) {
+      window.dispatchEvent(new CustomEvent('show-login'));
+      return;
+    }
+    setOpen(true);
+  };
+
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={handleOpen}
         className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[var(--color-primary)] text-white shadow-lg flex items-center justify-center text-3xl hover:scale-110 transition-transform z-40 cursor-pointer"
         aria-label="Subir foto"
       >
