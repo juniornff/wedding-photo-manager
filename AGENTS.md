@@ -18,7 +18,7 @@ Functional. Backend (FastAPI) and Frontend (React) are built and verified. Run v
 | Module | Purpose |
 |---|---|
 | **Main** | Upload/view/download photos; wedding info + carousel + gallery |
-| **Fotógrafo Secreto** | Per-table QR challenges; 10 retos/table, 1 photo/participant/reto, max 3 photos/reto |
+| **Fotógrafo Secreto** | Per-table QR challenges; 10 retos/table, 1 photo/participant/reto, max = nro participantes mesa |
 | **Admin** | Wedding panel; manage carousel, info, color scheme, tables, challenges, pick winner |
 
 ## Frontend routes
@@ -52,7 +52,7 @@ Functional. Backend (FastAPI) and Frontend (React) are built and verified. Run v
 
 ### Fotógrafo Secreto specifics
 - Un usuario se asigna a una mesa una sola vez (campo `table_id` en User); error si reasigna
-- Reto bloqueado al llegar a 3 fotos; admin puede desbloquear solo para editar/eliminar
+- Reto bloqueado al alcanzar el número de participantes de la mesa; admin puede desbloquear solo para editar/eliminar
 - QR generado como PNG estático en `Fotos/Fotografo-Secreto/Mesa-XX/QR.png`
 - Admin elige ganador subjetivamente; vista en grilla agrupada por reto
 
@@ -63,7 +63,7 @@ Functional. Backend (FastAPI) and Frontend (React) are built and verified. Run v
 - **GalleryPhoto** — guest uploads in main module
 - **Table** — mesas with unique QR links
 - **Challenge** — retos linked to a table (10 per table)
-- **ChallengePhoto** — per-reto submissions (1/user/reto, max 3/reto)
+- **ChallengePhoto** — per-reto submissions (1/user/reto, max = nro participantes mesa)
 - **Admin** — wedding couple credentials
 
 ## Conventions

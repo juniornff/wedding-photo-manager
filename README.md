@@ -79,7 +79,7 @@ graph LR
 ### Módulo Fotógrafo Secreto
 - Cada mesa tiene un QR único (generado como PNG estático en `Fotos/Fotografo-Secreto/Mesa-XX/QR.png`)
 - 10 retos por mesa (creados uno por uno desde el panel admin)
-- 1 foto por participante por reto, máximo 3 fotos por reto
+- 1 foto por participante por reto, máximo igual al número de participantes de la mesa
 - El usuario se asigna a una mesa al escanear el QR (una sola vez, error si reasigna)
 - Fotos almacenadas en `Fotos/Fotografo-Secreto/Mesa-XX/`
 - Admin elige ganador manualmente; visualización en grilla agrupada por reto
@@ -290,9 +290,9 @@ sequenceDiagram
     C->>API: GET /api/secret-photographer/challenge/{id}
     API->>DB: SELECT challenge_photos (count)
     DB-->>API: photo_count
-    alt photo_count >= 3
+    alt photo_count >= max_photos (nro participantes mesa)
         API-->>C: { blocked: true, message: "Reto completo" }
-    else photo_count < 3
+    else
         API-->>C: { challenge, can_upload: true }
     end
 
@@ -303,8 +303,8 @@ sequenceDiagram
         API-->>C: 409 { error: "Ya subiste una foto para este reto" }
     else
         API->>DB: SELECT count WHERE challenge_id
-        alt count >= 3
-            API-->>C: 409 { error: "Reto completo (3 fotos)" }
+        alt count >= max_photos (nro participantes mesa)
+            API-->>C: 409 { error: "Reto completo" }
         else
             API->>API: Guardar archivo
             API->>DB: INSERT challenge_photo
@@ -518,9 +518,9 @@ Miniaturas/
 - **Paginación infinita** con offset/limit
 - **15 subidas/minuto** por usuario (rate limit)
 - Las fotos se sirven **a través de FastAPI** (sin autenticación para visualizar)
-- Fotógrafo Secreto: **1 foto/usuario/reto**, máximo **3 fotos/reto**
+- Fotógrafo Secreto: **1 foto/usuario/reto**, máximo **= nro de participantes de la mesa**
 - Un usuario se asigna a una **mesa una sola vez** (campo `table_id` en User)
-- Los retos bloqueados al llegar a 3 fotos; admin puede desbloquear solo para editar/eliminar
+- Los retos se bloquean al alcanzar el número de participantes de la mesa; admin puede desbloquear solo para editar/eliminar
 - **Admin**: Google OAuth + session cookies + verificación contra emails en `.env`
 - **Admin inicial** creado desde `.env` (email + password)
 - `Miniaturas/` replica exactamente la estructura de `Fotos/`

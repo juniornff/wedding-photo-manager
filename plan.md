@@ -83,7 +83,7 @@ Las fotos subidas se almacenan en la subcarpeta "Fotos/Fotografo-Secreto/Mesa-XX
 - Cada mesa posee un enlace/QR diferente asociado.
 - Al ingresar al enlace/QR de cada mesa los participante se les asocia a dicha mesa.
 - Un participante solo puede subir UNA foto por cada reto.
-- Cada reto acepta máximo 3 fotografías, luego queda bloqueado.
+- El maximo de fotografías de cada reto será el numero de participantes de la mesa, luego queda bloqueado. (5 participantes = 5 fotos, 8 participantes = 8 fotos)
 - Las fotografías únicamente pertenecen a la mesa desde donde se escaneó el QR.
 - Al finalizar, los novios seleccionan manualmente la mesa ganadora.
 
