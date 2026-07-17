@@ -40,6 +40,14 @@ function DashboardTab() {
   );
 }
 
+const DEFAULT_COLORS = {
+  color_primary: '#e8a0b4',
+  color_secondary: '#f5d6c6',
+  color_accent: '#c48b9d',
+  color_bg: '#fdf6f0',
+  color_text: '#4a3728',
+};
+
 const COLOR_FIELDS = [
   { key: 'color_primary', label: 'Principal', desc: 'Botones, títulos, pestañas activas' },
   { key: 'color_secondary', label: 'Secundario', desc: 'Fondos de secciones, bordes' },
@@ -48,7 +56,11 @@ const COLOR_FIELDS = [
   { key: 'color_text', label: 'Texto', desc: 'Color del texto principal' },
 ];
 
-function ColorField({ label, desc, value, onChange }) {
+function colorOrDefault(value, key) {
+  return value || DEFAULT_COLORS[key] || '#000000';
+}
+
+function ColorField({ label, desc, value, onChange, defaultVal }) {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-3">
@@ -58,16 +70,16 @@ function ColorField({ label, desc, value, onChange }) {
         </div>
         <input
           type="color"
-          value={value || '#000000'}
+          value={value || defaultVal || '#000000'}
           onChange={(e) => onChange(e.target.value)}
           className="w-10 h-10 rounded cursor-pointer border-0 p-0.5 shrink-0"
         />
         <input
           type="text"
-          value={value || ''}
+          value={value || defaultVal || ''}
           onChange={(e) => onChange(e.target.value)}
           className="border rounded-lg p-2 text-sm font-mono flex-1"
-          placeholder="#000000"
+          placeholder={defaultVal || '#000000'}
           maxLength={7}
         />
       </div>
@@ -79,26 +91,28 @@ function WeddingInfoTab() {
   const [form, setForm] = useState({ novio1_name: '', novio2_name: '', wedding_date: '', color_primary: '', color_secondary: '', color_accent: '', color_bg: '', color_text: '', carousel_interval: 5 });
   const [msg, setMsg] = useState('');
 
+  const initForm = (data) => {
+    const colors = (data?.color_scheme || '').split(',').map((c) => c.trim());
+    setForm({
+      novio1_name: data?.novio1_name || '',
+      novio2_name: data?.novio2_name || '',
+      wedding_date: data?.wedding_date || '',
+      color_primary: colors[0] || '',
+      color_secondary: colors[1] || '',
+      color_accent: colors[2] || '',
+      color_bg: colors[3] || '',
+      color_text: colors[4] || '',
+      carousel_interval: data?.carousel_interval ?? 5,
+    });
+  };
+
   useEffect(() => {
-    api('/api/wedding-info').then((data) => {
-      const colors = (data.color_scheme || '').split(',').map((c) => c.trim());
-      setForm({
-        novio1_name: data.novio1_name || '',
-        novio2_name: data.novio2_name || '',
-        wedding_date: data.wedding_date || '',
-        color_primary: colors[0] || '',
-        color_secondary: colors[1] || '',
-        color_accent: colors[2] || '',
-        color_bg: colors[3] || '',
-        color_text: colors[4] || '',
-        carousel_interval: data.carousel_interval ?? 5,
-      });
-    }).catch(() => {});
+    api('/api/wedding-info').then(initForm).catch(() => {});
   }, []);
 
   const handleSave = async () => {
     try {
-      const parts = COLOR_FIELDS.map((f) => form[f.key]).filter(Boolean);
+      const parts = COLOR_FIELDS.map((f) => form[f.key] || DEFAULT_COLORS[f.key]).filter(Boolean);
       await api('/api/admin/wedding-info', {
         method: 'PUT',
         body: JSON.stringify({
@@ -116,6 +130,13 @@ function WeddingInfoTab() {
     }
   };
 
+  const handleReset = () => {
+    setForm((prev) => ({
+      ...prev,
+      ...Object.fromEntries(COLOR_FIELDS.map((f) => [f.key, ''])),
+    }));
+  };
+
   return (
     <div className="max-w-lg space-y-4">
       <div>
@@ -131,9 +152,12 @@ function WeddingInfoTab() {
         <input type="date" value={form.wedding_date} onChange={(e) => setForm({ ...form, wedding_date: e.target.value })} className="w-full border rounded-lg p-2 text-sm" />
       </div>
       <div className="space-y-4 pt-2 border-t border-gray-200">
-        <p className="text-sm font-semibold">Esquema de color</p>
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold">Esquema de color</p>
+          <button onClick={handleReset} className="text-xs px-3 py-1 rounded border border-gray-300 text-gray-500 hover:bg-gray-100 cursor-pointer">Restaurar valores iniciales</button>
+        </div>
         {COLOR_FIELDS.map((f) => (
-          <ColorField key={f.key} label={f.label} desc={f.desc} value={form[f.key]} onChange={(v) => setForm({ ...form, [f.key]: v })} />
+          <ColorField key={f.key} label={f.label} desc={f.desc} value={form[f.key]} defaultVal={DEFAULT_COLORS[f.key]} onChange={(v) => setForm({ ...form, [f.key]: v })} />
         ))}
       </div>
       <div>
