@@ -40,30 +40,43 @@ function DashboardTab() {
   );
 }
 
-function ColorField({ label, value, onChange }) {
+const COLOR_FIELDS = [
+  { key: 'color_primary', label: 'Principal', desc: 'Botones, títulos, pestañas activas' },
+  { key: 'color_secondary', label: 'Secundario', desc: 'Fondos de secciones, bordes' },
+  { key: 'color_accent', label: 'Terciario', desc: 'Enlaces y detalles decorativos' },
+  { key: 'color_bg', label: 'Fondo página', desc: 'Color de fondo general del sitio' },
+  { key: 'color_text', label: 'Texto', desc: 'Color del texto principal' },
+];
+
+function ColorField({ label, desc, value, onChange }) {
   return (
-    <div className="flex items-center gap-3">
-      <label className="text-sm font-medium w-24 shrink-0">{label}</label>
-      <input
-        type="color"
-        value={value || '#000000'}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-10 h-10 rounded cursor-pointer border-0 p-0.5"
-      />
-      <input
-        type="text"
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
-        className="border rounded-lg p-2 text-sm font-mono flex-1"
-        placeholder="#000000"
-        maxLength={7}
-      />
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-3">
+        <div className="w-24 shrink-0">
+          <label className="text-sm font-medium">{label}</label>
+          <p className="text-[10px] text-gray-400 leading-tight">{desc}</p>
+        </div>
+        <input
+          type="color"
+          value={value || '#000000'}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-10 h-10 rounded cursor-pointer border-0 p-0.5 shrink-0"
+        />
+        <input
+          type="text"
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value)}
+          className="border rounded-lg p-2 text-sm font-mono flex-1"
+          placeholder="#000000"
+          maxLength={7}
+        />
+      </div>
     </div>
   );
 }
 
 function WeddingInfoTab() {
-  const [form, setForm] = useState({ novio1_name: '', novio2_name: '', wedding_date: '', color_primary: '', color_secondary: '', color_accent: '', carousel_interval: 5 });
+  const [form, setForm] = useState({ novio1_name: '', novio2_name: '', wedding_date: '', color_primary: '', color_secondary: '', color_accent: '', color_bg: '', color_text: '', carousel_interval: 5 });
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
@@ -76,6 +89,8 @@ function WeddingInfoTab() {
         color_primary: colors[0] || '',
         color_secondary: colors[1] || '',
         color_accent: colors[2] || '',
+        color_bg: colors[3] || '',
+        color_text: colors[4] || '',
         carousel_interval: data.carousel_interval ?? 5,
       });
     }).catch(() => {});
@@ -83,7 +98,7 @@ function WeddingInfoTab() {
 
   const handleSave = async () => {
     try {
-      const parts = [form.color_primary, form.color_secondary, form.color_accent].filter(Boolean);
+      const parts = COLOR_FIELDS.map((f) => form[f.key]).filter(Boolean);
       await api('/api/admin/wedding-info', {
         method: 'PUT',
         body: JSON.stringify({
@@ -115,17 +130,17 @@ function WeddingInfoTab() {
         <label className="block text-sm font-medium mb-1">Fecha</label>
         <input type="date" value={form.wedding_date} onChange={(e) => setForm({ ...form, wedding_date: e.target.value })} className="w-full border rounded-lg p-2 text-sm" />
       </div>
-      <div className="space-y-3 pt-2 border-t border-gray-200">
+      <div className="space-y-4 pt-2 border-t border-gray-200">
         <p className="text-sm font-semibold">Esquema de color</p>
-        <ColorField label="Principal" value={form.color_primary} onChange={(v) => setForm({ ...form, color_primary: v })} />
-        <ColorField label="Secundario" value={form.color_secondary} onChange={(v) => setForm({ ...form, color_secondary: v })} />
-        <ColorField label="Terciario" value={form.color_accent} onChange={(v) => setForm({ ...form, color_accent: v })} />
+        {COLOR_FIELDS.map((f) => (
+          <ColorField key={f.key} label={f.label} desc={f.desc} value={form[f.key]} onChange={(v) => setForm({ ...form, [f.key]: v })} />
+        ))}
       </div>
       <div>
         <label className="block text-sm font-medium mb-1">Intervalo del carrusel (segundos)</label>
         <input type="number" min="2" max="60" value={form.carousel_interval} onChange={(e) => setForm({ ...form, carousel_interval: parseInt(e.target.value) || 5 })} className="w-full border rounded-lg p-2 text-sm" />
       </div>
-      <button onClick={handleSave} className="px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm cursor-pointer">Guardar</button>
+      <button onClick={handleSave} className="px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm cursor-pointer">Salvar</button>
       {msg && <p className="text-sm text-green-600">{msg}</p>}
     </div>
   );

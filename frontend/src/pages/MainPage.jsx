@@ -24,6 +24,8 @@ export default function MainPage() {
         if (colors[0]) document.documentElement.style.setProperty('--color-primary', colors[0]);
         if (colors[1]) document.documentElement.style.setProperty('--color-secondary', colors[1]);
         if (colors[2]) document.documentElement.style.setProperty('--color-accent', colors[2]);
+        if (colors[3]) document.documentElement.style.setProperty('--color-bg', colors[3]);
+        if (colors[4]) document.documentElement.style.setProperty('--color-text', colors[4]);
       }
     }).catch(() => {});
     api('/api/carousel').then(setCarousel).catch(() => {});
