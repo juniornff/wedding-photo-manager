@@ -61,7 +61,7 @@ export default function MainPage() {
   return (
     <div className="min-h-screen">
       {info && (
-        <section className="relative overflow-hidden">
+        <section className="relative overflow-hidden w-full aspect-video">
           {carousel.length > 0 && (
             <div className="absolute inset-0">
               {carousel.map((photo, idx) => (
@@ -73,14 +73,14 @@ export default function MainPage() {
                   <img
                     src={photoUrl(photo)}
                     alt=""
-                    className="w-full h-full object-contain"
+                    className="w-full h-full object-cover"
                   />
                 </div>
               ))}
             </div>
           )}
           <div
-            className="relative z-10 flex flex-col items-center justify-center text-center px-4 min-h-[45vh] md:min-h-[70vh]"
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center text-center px-4"
             style={{ backgroundColor: carousel.length > 0 ? 'transparent' : 'var(--color-secondary)' }}
           >
             <div className="bg-black/50 rounded-xl p-6 md:p-8 backdrop-blur-sm inline-block">
