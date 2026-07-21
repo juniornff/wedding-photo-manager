@@ -19,7 +19,8 @@ class Settings(BaseSettings):
     PORT: int = 8000
 
     model_config = {
-        "env_file": str(Path(__file__).resolve().parent.parent / ".env")
+        "env_file": str(Path(__file__).resolve().parent.parent / ".env"),
+        "extra": "ignore",
     }
 
 
