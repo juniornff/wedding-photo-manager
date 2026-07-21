@@ -61,7 +61,7 @@ export default function MainPage() {
   return (
     <div className="min-h-screen">
       {info && (
-        <section className="relative overflow-hidden w-full aspect-video">
+        <section className="relative overflow-hidden w-full h-[35vh] lg:h-[40vh]">
           {carousel.length > 0 && (
             <div className="absolute inset-0">
               {carousel.map((photo, idx) => (
