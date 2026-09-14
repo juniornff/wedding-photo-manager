@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import PhotoUpload from '../components/PhotoUpload';
 import { useAuth } from '../context/AuthContext';
@@ -20,14 +20,23 @@ export default function FotografoSecretoPage() {
   const [error, setError] = useState(null);
   const [selectedChallenge, setSelectedChallenge] = useState(null);
 
-  useEffect(() => {
-    api(`/api/secret-photographer/table/${qr_code}`)
+  const fetchTable = useCallback(async () => {
+    const query = user ? `?user_id=${user.id}` : '';
+    return api(`/api/secret-photographer/table/${qr_code}${query}`);
+  }, [qr_code, user]);
+
+  const loadTable = useCallback(() => {
+    fetchTable()
       .then((data) => {
         setTable(data.table || data);
         setChallenges(data.challenges || []);
       })
       .catch((err) => setError(err.message));
-  }, [qr_code]);
+  }, [fetchTable]);
+
+  useEffect(() => {
+    loadTable();
+  }, [loadTable]);
 
   if (error) {
     return (
@@ -109,12 +118,11 @@ export default function FotografoSecretoPage() {
               <PhotoUpload
                 uploadUrl={`/api/secret-photographer/upload?challenge_id=${selectedChallenge.id}`}
                 onSuccess={() => {
-                  api(`/api/secret-photographer/table/${qr_code}`)
-                    .then((data) => {
-                      setChallenges(data.challenges || []);
-                      const updated = (data.challenges || []).find((c) => c.id === selectedChallenge.id);
-                      if (updated) setSelectedChallenge(updated);
-                    });
+                  fetchTable().then((data) => {
+                    setChallenges(data.challenges || []);
+                    const updated = (data.challenges || []).find((c) => c.id === selectedChallenge.id);
+                    if (updated) setSelectedChallenge(updated);
+                  });
                 }}
               />
             )}

@@ -111,7 +111,7 @@ async def get_challenge(challenge_id: int, db: AsyncSession = Depends(get_db)):
 @secret_router.post("/upload", response_model=ChallengeUploadResponse, status_code=201)
 async def upload_challenge_photo(
     file: UploadFile = File(...),
-    challenge_id: int = Form(...),
+    challenge_id: int = Query(...),
     user_id: int = Form(...),
     db: AsyncSession = Depends(get_db),
 ):

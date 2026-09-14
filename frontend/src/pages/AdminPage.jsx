@@ -288,19 +288,43 @@ function TablesTab() {
         />
         <button onClick={handleCreate} className="px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm cursor-pointer">Crear</button>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-3">
         {tables.map((table) => (
-          <div key={table.id} className="flex items-center justify-between bg-white rounded-lg p-3 shadow-sm">
-            <div>
-              <p className="font-medium text-sm">{table.name || `Mesa ${table.number}`}</p>
-              <p className="text-xs text-gray-400">QR: {table.qr_code}</p>
+          <div key={table.id} className="bg-white rounded-lg p-3 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-sm">{table.name || `Mesa ${table.number}`}</p>
+                <p className="text-xs text-gray-400">QR: {table.qr_code}</p>
+              </div>
+              <div className="flex gap-2">
+                {table.qr_url && (
+                  <a href={`${API_BASE}${table.qr_url}`} download className="text-xs px-3 py-1 bg-gray-100 rounded cursor-pointer">QR</a>
+                )}
+                <button
+                  onClick={() => {
+                    const url = `${window.location.origin}/fotografo-secreto/${table.qr_code}`;
+                    navigator.clipboard.writeText(url);
+                  }}
+                  className="text-xs px-3 py-1 bg-blue-100 text-blue-600 rounded cursor-pointer"
+                >Copiar URL</button>
+                <button onClick={() => handleDelete(table.id)} className="text-xs px-3 py-1 bg-red-100 text-red-600 rounded cursor-pointer">Eliminar</button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              {table.qr_url && (
-                <a href={`${API_BASE}${table.qr_url}`} download className="text-xs px-3 py-1 bg-gray-100 rounded cursor-pointer">QR</a>
-              )}
-              <button onClick={() => handleDelete(table.id)} className="text-xs px-3 py-1 bg-red-100 text-red-600 rounded cursor-pointer">Eliminar</button>
-            </div>
+            {table.participants && table.participants.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-gray-100">
+                <p className="text-xs text-gray-500 mb-1">Participantes ({table.participants.length}):</p>
+                <div className="flex flex-wrap gap-2">
+                  {table.participants.map((p) => (
+                    <span key={p.id} className="flex items-center gap-1 text-xs bg-gray-50 rounded-full px-2 py-1">
+                      {p.google_photo && (
+                        <img src={p.google_photo} alt="" className="w-4 h-4 rounded-full" />
+                      )}
+                      {p.google_name || p.alias}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>

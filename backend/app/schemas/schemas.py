@@ -88,11 +88,21 @@ class TableCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
 
 
+class ParticipantInfo(BaseModel):
+    id: int
+    alias: str
+    google_name: str | None = None
+    google_photo: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class TableResponse(BaseModel):
     id: int
     name: str
     qr_code: str
     qr_url: str | None = None
+    participants: list[ParticipantInfo] = []
     created_at: datetime
 
     model_config = {"from_attributes": True}

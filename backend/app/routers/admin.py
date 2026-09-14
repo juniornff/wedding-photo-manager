@@ -182,11 +182,19 @@ async def list_tables(db: AsyncSession = Depends(get_db)):
         abs_dir = os.path.join(settings.UPLOAD_DIR, table_dir)
         qr_abs_path = os.path.join(abs_dir, "QR.png")
         qr_url = f"/api/uploads/{table_dir}/QR.png" if os.path.exists(qr_abs_path) else None
+        users_result = await db.execute(
+            select(User).where(User.table_id == t.id).order_by(User.alias)
+        )
+        participants = users_result.scalars().all()
         responses.append(TableResponse(
             id=t.id,
             name=t.name,
             qr_code=t.qr_code,
             qr_url=qr_url,
+            participants=[
+                {"id": u.id, "alias": u.alias, "google_name": u.google_name, "google_photo": u.google_photo}
+                for u in participants
+            ],
             created_at=t.created_at,
         ))
     return responses
