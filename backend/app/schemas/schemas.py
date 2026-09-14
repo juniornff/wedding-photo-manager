@@ -152,6 +152,7 @@ class ChallengePhotoResponse(BaseModel):
     uuid: str
     path: str
     thumbnail_path: str
+    message: Optional[str] = None
     challenge_id: int
     user_id: int
     user_alias: Optional[str] = None

@@ -113,6 +113,7 @@ async def upload_challenge_photo(
     file: UploadFile = File(...),
     challenge_id: int = Query(...),
     user_id: int = Form(...),
+    message: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     check_rate_limit(user_id)
@@ -162,6 +163,7 @@ async def upload_challenge_photo(
         )
 
     validate_file(file)
+    message = message.strip()[:150] if message and message.strip() else None
 
     table_dir = f"Fotografo-Secreto/Mesa-{challenge.table_id:02d}"
     photo_path = save_photo(file, table_dir)
@@ -171,6 +173,7 @@ async def upload_challenge_photo(
         uuid=photo_path.split("/")[-1].split(".")[0],
         path=photo_path,
         thumbnail_path=thumbnail_path,
+        message=message,
         challenge_id=challenge_id,
         user_id=user_id,
     )

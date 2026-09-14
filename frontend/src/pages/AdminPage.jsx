@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api, apiUpload, API_BASE } from '../api';
+import ChallengePhotosModal from '../components/ChallengePhotosModal';
 
 function TabButton({ active, onClick, children }) {
   return (
@@ -249,6 +250,7 @@ function CarouselTab() {
 function TablesTab() {
   const [tables, setTables] = useState([]);
   const [newName, setNewName] = useState('');
+  const [qrModal, setQrModal] = useState(null);
 
   useEffect(() => {
     api('/api/admin/tables').then(setTables).catch(() => {});
@@ -298,7 +300,12 @@ function TablesTab() {
               </div>
               <div className="flex gap-2">
                 {table.qr_url && (
-                  <a href={`${API_BASE}${table.qr_url}`} download className="text-xs px-3 py-1 bg-gray-100 rounded cursor-pointer">QR</a>
+                  <button
+                    onClick={() => setQrModal(table)}
+                    className="text-xs px-3 py-1 bg-gray-100 rounded cursor-pointer"
+                  >
+                    QR
+                  </button>
                 )}
                 <button
                   onClick={() => {
@@ -328,6 +335,63 @@ function TablesTab() {
           </div>
         ))}
       </div>
+
+      {qrModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setQrModal(null)}
+        >
+          <div
+            className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start mb-4">
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold truncate">{qrModal.name || `Mesa ${qrModal.number || qrModal.id}`}</h2>
+                <p className="text-xs text-gray-400">Código QR de la mesa</p>
+              </div>
+              <button
+                onClick={() => setQrModal(null)}
+                className="text-gray-400 hover:text-gray-600 text-xl cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+
+            {qrModal.qr_url && (
+              <img
+                src={`${API_BASE}${qrModal.qr_url}`}
+                alt={`QR de ${qrModal.name || qrModal.id}`}
+                className="w-full max-w-[220px] mx-auto rounded-lg"
+              />
+            )}
+
+            <p className="text-xs text-gray-500 text-center mt-4 break-all">
+              {`${window.location.origin}/fotografo-secreto/${qrModal.qr_code}`}
+            </p>
+
+            <div className="flex justify-center gap-2 mt-4">
+              {qrModal.qr_url && (
+                <a
+                  href={`${API_BASE}${qrModal.qr_url}`}
+                  download
+                  className="text-xs px-3 py-1 bg-gray-100 rounded cursor-pointer"
+                >
+                  Descargar QR
+                </a>
+              )}
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.origin}/fotografo-secreto/${qrModal.qr_code}`);
+                }}
+                className="text-xs px-3 py-1 bg-blue-100 text-blue-600 rounded cursor-pointer"
+              >
+                Copiar URL
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -337,17 +401,22 @@ function ChallengesTab() {
   const [selectedTable, setSelectedTable] = useState(null);
   const [challenges, setChallenges] = useState([]);
   const [newTitle, setNewTitle] = useState('');
+  const [manageChallenge, setManageChallenge] = useState(null);
 
   useEffect(() => {
     api('/api/admin/tables').then(setTables).catch(() => {});
   }, []);
 
-  useEffect(() => {
+  const loadChallenges = useCallback(() => {
     if (!selectedTable) return;
     api(`/api/admin/challenges?table_id=${selectedTable}`)
       .then(setChallenges)
       .catch(() => {});
   }, [selectedTable]);
+
+  useEffect(() => {
+    loadChallenges();
+  }, [loadChallenges]);
 
   const handleCreate = async () => {
     if (!newTitle.trim() || !selectedTable) return;
@@ -416,6 +485,12 @@ function ChallengesTab() {
                   <p className="text-xs text-gray-400">{ch.photo_count || 0}/{ch.max_photos || 0} fotos{ch.locked ? ' (desbloqueado)' : ''}</p>
                 </div>
                 <div className="flex gap-2">
+                  <button
+                    onClick={() => setManageChallenge(ch)}
+                    className="text-xs px-3 py-1 bg-green-100 text-green-700 rounded cursor-pointer"
+                  >
+                    Fotos
+                  </button>
                   {ch.photo_count >= ch.max_photos && ch.max_photos > 0 && !ch.locked && (
                     <button onClick={() => handleUnlock(ch.id)} className="text-xs px-3 py-1 bg-yellow-100 text-yellow-700 rounded cursor-pointer">Desbloquear</button>
                   )}
@@ -425,6 +500,14 @@ function ChallengesTab() {
             ))}
           </div>
         </>
+      )}
+
+      {manageChallenge && (
+        <ChallengePhotosModal
+          challenge={manageChallenge}
+          onClose={() => setManageChallenge(null)}
+          onDeleted={loadChallenges}
+        />
       )}
     </div>
   );

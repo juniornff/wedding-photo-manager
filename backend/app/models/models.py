@@ -102,6 +102,7 @@ class ChallengePhoto(Base):
     uuid = Column(String(36), unique=True, nullable=False)
     path = Column(String(500), nullable=False)
     thumbnail_path = Column(String(500), nullable=False)
+    message = Column(String(150), nullable=True)
     challenge_id = Column(Integer, ForeignKey("challenges.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     uploaded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

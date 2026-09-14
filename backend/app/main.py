@@ -54,6 +54,11 @@ async def lifespan(app: FastAPI):
             await db.commit()
         except Exception:
             pass
+        try:
+            await db.execute(text("ALTER TABLE challenge_photos ADD COLUMN message VARCHAR(150)"))
+            await db.commit()
+        except Exception:
+            pass
 
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     os.makedirs(settings.THUMBNAILS_DIR, exist_ok=True)

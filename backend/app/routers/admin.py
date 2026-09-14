@@ -395,6 +395,82 @@ async def delete_challenge(challenge_id: int, db: AsyncSession = Depends(get_db)
     await db.commit()
 
 
+@admin_router.get("/challenges/{challenge_id}/photos", response_model=list[ChallengePhotoResponse])
+async def get_challenge_photos(challenge_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Challenge).where(Challenge.id == challenge_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Reto no encontrado.")
+
+    result = await db.execute(
+        select(ChallengePhoto, User)
+        .join(User, ChallengePhoto.user_id == User.id)
+        .where(ChallengePhoto.challenge_id == challenge_id)
+        .order_by(ChallengePhoto.uploaded_at)
+    )
+    rows = result.all()
+    return [
+        ChallengePhotoResponse(
+            id=cp.id,
+            uuid=cp.uuid,
+            path=cp.path,
+            thumbnail_path=cp.thumbnail_path,
+            message=cp.message,
+            challenge_id=cp.challenge_id,
+            user_id=cp.user_id,
+            user_alias=user.alias,
+            user_google_name=user.google_name,
+            user_google_photo=user.google_photo,
+            uploaded_at=cp.uploaded_at,
+        )
+        for cp, user in rows
+    ]
+
+
+@admin_router.delete("/challenges/{challenge_id}/photos/{photo_id}", status_code=204)
+async def delete_challenge_photo(
+    challenge_id: int,
+    photo_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Challenge).where(Challenge.id == challenge_id))
+    challenge = result.scalar_one_or_none()
+    if not challenge:
+        raise HTTPException(status_code=404, detail="Reto no encontrado.")
+
+    result = await db.execute(
+        select(ChallengePhoto).where(
+            ChallengePhoto.id == photo_id,
+            ChallengePhoto.challenge_id == challenge_id,
+        )
+    )
+    photo = result.scalar_one_or_none()
+    if not photo:
+        raise HTTPException(status_code=404, detail="Foto no encontrada.")
+
+    delete_photo(photo.path, photo.thumbnail_path)
+    await db.delete(photo)
+    await db.commit()
+
+    photo_count_result = await db.execute(
+        select(func.count(ChallengePhoto.id)).where(ChallengePhoto.challenge_id == challenge_id)
+    )
+    photo_count = photo_count_result.scalar() or 0
+
+    user_count_result = await db.execute(
+        select(func.count(User.id)).where(User.table_id == challenge.table_id)
+    )
+    max_photos = user_count_result.scalar() or 0
+
+    if challenge.locked and photo_count < max_photos:
+        challenge.locked = False
+        await db.commit()
+
+    await sse_manager.broadcast("challenge_photo_deleted", {
+        "photo_id": photo_id,
+        "challenge_id": challenge_id,
+    })
+
+
 @admin_router.get("/tables/{table_id}/photos", response_model=list[TablePhotosResponse])
 async def get_table_photos(table_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Table).where(Table.id == table_id))
@@ -421,6 +497,7 @@ async def get_table_photos(table_id: int, db: AsyncSession = Depends(get_db)):
                 uuid=cp.uuid,
                 path=cp.path,
                 thumbnail_path=cp.thumbnail_path,
+                message=cp.message,
                 challenge_id=cp.challenge_id,
                 user_id=cp.user_id,
                 user_alias=user.alias,
