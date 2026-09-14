@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import PhotoUpload from '../components/PhotoUpload';
 import PhotoLightbox from '../components/PhotoLightbox';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { api, API_BASE } from '../api';
 
 function isBlocked(ch) {

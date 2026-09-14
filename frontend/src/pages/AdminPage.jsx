@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { api, apiUpload, API_BASE } from '../api';
 import ChallengePhotosModal from '../components/ChallengePhotosModal';
 
@@ -56,10 +56,6 @@ const COLOR_FIELDS = [
   { key: 'color_bg', label: 'Fondo página', desc: 'Color de fondo general del sitio' },
   { key: 'color_text', label: 'Texto', desc: 'Color del texto principal' },
 ];
-
-function colorOrDefault(value, key) {
-  return value || DEFAULT_COLORS[key] || '#000000';
-}
 
 function ColorField({ label, desc, value, onChange, defaultVal }) {
   return (
@@ -826,6 +822,7 @@ function AdminLoginForm() {
 
 export default function AdminPage() {
   const { isAdmin, loading } = useAuth();
+  const [tab, setTab] = useState('dashboard');
 
   if (loading) {
     return (
@@ -838,8 +835,6 @@ export default function AdminPage() {
   if (!isAdmin) {
     return <AdminLoginForm />;
   }
-
-  const [tab, setTab] = useState('dashboard');
 
   const tabs = [
     { key: 'dashboard', label: 'Dashboard' },

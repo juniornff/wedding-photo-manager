@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import PhotoGrid from '../components/PhotoGrid';
 import PhotoUpload from '../components/PhotoUpload';
-import { useSSE } from '../context/SSEContext';
+import { useSSE } from '../context/useSSE';
 import { API_BASE, api } from '../api';
 
 function photoUrl(photo) {

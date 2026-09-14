@@ -46,7 +46,7 @@ The backend broadcasts these named events via `sse_manager.broadcast()`:
 | `challenge_photo_deleted` | Admin delete challenge photo | `{ photo_id, challenge_id }` |
 | `winner_selected` | Admin select/deselect winner | `{ winner_table_id, winner_table_name }` |
 
-- `SSEProvider` (React Context) listens to all events; used by `MainPage` and `AdminPage`
+- `SSEProvider` (React Context) registers exactly the 7 events above; only `MainPage` consumes `lastEvent` (refresh gallery on `new_photo`/`gallery_photo_deleted`, carousel on `carousel_updated`, wedding info on `info_updated`). `AdminPage` does **not** use SSE
 - `SecretDashboardPage` creates its **own EventSource** (`/api/events`, public) — does not depend on login
 - `MainPage` refreshes gallery on both `new_photo` and `gallery_photo_deleted`; refreshes wedding info on `info_updated`
 
@@ -98,12 +98,13 @@ The backend broadcasts these named events via `sse_manager.broadcast()`:
 - Admin puede gestionar fotos de retos desde el tab `/Fotos Retos` (ver, borrar, mensaje del usuario visible)
 - El dashboard público escucha SSE (`new_challenge_photo`, `challenge_photo_deleted`, `winner_selected`) con un EventSource propio (no depende del login); confetti **solo** al elegir ganador (no al deseleccionar)
 
+## Context API (frontend)
+Contextos divididos en 3 archivos cada uno (patrón canónico fast-refresh; lint limpio, 0 errores/0 warnings):
+- `context/AuthContext.js` (`createContext`) + `context/AuthProvider.jsx` (`AuthProvider` component) + `context/useAuth.jsx` (`useAuth` hook)
+- `context/SSEContext.js` (`createContext`) + `context/SSEProvider.jsx` (`SSEProvider` component) + `context/useSSE.jsx` (`useSSE` hook)
+
 ## Database entities
 Canonical ER diagram in `README.md`. Summary: **User** (anonymous uuid+alias or Google-authenticated; `table_id` set once; `google_name`, `google_photo`), **WeddingInfo** (couple names, date, color scheme, `winner_table_id`, `carousel_interval`), **CarouselPhoto**, **GalleryPhoto**, **Table** (unique QR links), **Challenge** (10 per table, `locked` flag), **ChallengePhoto** (1/user/reto, `message` field, `UniqueConstraint(challenge_id, user_id)`), **Admin** (credentials).
-
-## Known issues
-- Pre-existing lint error: `react-hooks(rules-of-hooks)` in `AdminPage.jsx:842` — `useState('dashboard')` called conditionally (dashboard tab state). Not blocking.
-- Warnings (pre-existing): SSEContext (line 74), AuthContext (line 101), Navbar unused `api` import (line 3), AdminPage unused `colorOrDefault` (line 60)
 
 ## Conventions
 - `README.md` is the canonical architecture reference with Mermaid diagrams

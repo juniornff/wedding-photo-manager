@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
-import { SSEProvider } from './context/SSEContext';
+import { AuthProvider } from './context/AuthProvider';
+import { SSEProvider } from './context/SSEProvider';
 import Navbar from './components/Navbar';
 import MainPage from './pages/MainPage';
 import FotografoSecretoPage from './pages/FotografoSecretoPage';
