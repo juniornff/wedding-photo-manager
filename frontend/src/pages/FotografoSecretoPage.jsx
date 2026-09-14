@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import PhotoUpload from '../components/PhotoUpload';
+import PhotoLightbox from '../components/PhotoLightbox';
 import { useAuth } from '../context/AuthContext';
 import { api, API_BASE } from '../api';
 
@@ -19,6 +20,7 @@ export default function FotografoSecretoPage() {
   const [challenges, setChallenges] = useState([]);
   const [error, setError] = useState(null);
   const [selectedChallenge, setSelectedChallenge] = useState(null);
+  const [viewingMyPhoto, setViewingMyPhoto] = useState(false);
 
   const fetchTable = useCallback(async () => {
     const query = user ? `?user_id=${user.id}` : '';
@@ -79,6 +81,11 @@ export default function FotografoSecretoPage() {
           >
             <p className="text-xs font-semibold truncate">{challenge.description || `Reto ${challenge.id}`}</p>
             <p className="text-xs text-gray-400 mt-1">{challenge.photo_count || 0}/{challenge.max_photos || 0} fotos</p>
+            {challenge.my_photo && (
+              <span className="mt-1 inline-block text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                ✓ Tu foto subida
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -103,36 +110,59 @@ export default function FotografoSecretoPage() {
               <p className="text-sm text-gray-600 mb-4">{selectedChallenge.description}</p>
             )}
 
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {(selectedChallenge.photos || []).map((photo, idx) => (
-                <img
-                  key={photo.id || idx}
-                  src={photo.thumbnail_path ? `${API_BASE}/api/thumbnails/${photo.thumbnail_path}` : photo.path ? `${API_BASE}/api/uploads/${photo.path}` : ''}
-                  alt=""
-                  className="aspect-square object-cover rounded-lg"
+            {selectedChallenge.my_photo ? (
+              <>
+                <div className="flex justify-center mb-3">
+                  <button onClick={() => setViewingMyPhoto(true)} className="cursor-pointer group">
+                    <img
+                      src={
+                        selectedChallenge.my_photo.thumbnail_path
+                          ? `${API_BASE}/api/thumbnails/${selectedChallenge.my_photo.thumbnail_path}`
+                          : `${API_BASE}/api/uploads/${selectedChallenge.my_photo.path}`
+                      }
+                      alt="Tu foto"
+                      className="max-h-72 rounded-xl object-contain group-hover:opacity-90 transition"
+                    />
+                  </button>
+                </div>
+                {selectedChallenge.my_photo.message && (
+                  <p className="text-sm text-gray-600 text-center mb-2 italic">
+                    “{selectedChallenge.my_photo.message}”
+                  </p>
+                )}
+                <p className="text-xs text-green-600 text-center mb-2">
+                  ✓ Ya subiste tu foto para este reto — clic sobre la foto para verla completa
+                </p>
+              </>
+            ) : isBlocked(selectedChallenge) ? (
+              <p className="text-sm text-red-500 text-center mb-4">Este reto está completo</p>
+            ) : !user ? (
+              <p className="text-sm text-gray-400 text-center mb-4">Inicia sesión para subir fotos</p>
+            ) : (
+              <>
+                <p className="text-sm text-gray-400 text-center mb-3">
+                  Aún no subes tu foto para este reto
+                </p>
+                <PhotoUpload
+                  uploadUrl={`/api/secret-photographer/upload?challenge_id=${selectedChallenge.id}`}
+                  onSuccess={() => {
+                    fetchTable().then((data) => {
+                      setChallenges(data.challenges || []);
+                      const updated = (data.challenges || []).find((c) => c.id === selectedChallenge.id);
+                      if (updated) setSelectedChallenge(updated);
+                    });
+                  }}
                 />
-              ))}
-            </div>
+              </>
+            )}
 
-            {!isBlocked(selectedChallenge) && user && (
-              <PhotoUpload
-                uploadUrl={`/api/secret-photographer/upload?challenge_id=${selectedChallenge.id}`}
-                onSuccess={() => {
-                  fetchTable().then((data) => {
-                    setChallenges(data.challenges || []);
-                    const updated = (data.challenges || []).find((c) => c.id === selectedChallenge.id);
-                    if (updated) setSelectedChallenge(updated);
-                  });
-                }}
+            {viewingMyPhoto && selectedChallenge.my_photo && (
+              <PhotoLightbox
+                photos={[selectedChallenge.my_photo]}
+                index={0}
+                onClose={() => setViewingMyPhoto(false)}
+                onNavigate={() => {}}
               />
-            )}
-
-            {isBlocked(selectedChallenge) && (
-              <p className="text-sm text-red-500 text-center">Este reto está completo</p>
-            )}
-
-            {!user && (
-              <p className="text-sm text-gray-400 text-center">Inicia sesión para subir fotos</p>
             )}
           </div>
         </div>

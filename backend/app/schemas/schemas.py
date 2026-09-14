@@ -114,6 +114,22 @@ class ChallengeCreate(BaseModel):
     sort_order: int = 0
 
 
+class ChallengePhotoResponse(BaseModel):
+    id: int
+    uuid: str
+    path: str
+    thumbnail_path: str
+    message: Optional[str] = None
+    challenge_id: int
+    user_id: int
+    user_alias: Optional[str] = None
+    user_google_name: Optional[str] = None
+    user_google_photo: Optional[str] = None
+    uploaded_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class ChallengeResponse(BaseModel):
     id: int
     table_id: int
@@ -122,6 +138,7 @@ class ChallengeResponse(BaseModel):
     photo_count: int = 0
     max_photos: int = 0
     locked: bool = False
+    my_photo: Optional[ChallengePhotoResponse] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -143,22 +160,6 @@ class ChallengeDetailResponse(BaseModel):
     sort_order: int
     photo_count: int
     blocked: bool
-
-    model_config = {"from_attributes": True}
-
-
-class ChallengePhotoResponse(BaseModel):
-    id: int
-    uuid: str
-    path: str
-    thumbnail_path: str
-    message: Optional[str] = None
-    challenge_id: int
-    user_id: int
-    user_alias: Optional[str] = None
-    user_google_name: Optional[str] = None
-    user_google_photo: Optional[str] = None
-    uploaded_at: datetime
 
     model_config = {"from_attributes": True}
 

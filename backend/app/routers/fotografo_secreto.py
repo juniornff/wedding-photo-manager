@@ -125,6 +125,7 @@ async def get_table_by_qr(
     if not table:
         raise HTTPException(status_code=404, detail="Mesa no encontrada.")
 
+    user = None
     if user_id:
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
@@ -137,6 +138,16 @@ async def get_table_by_qr(
                     status_code=409,
                     detail="Ya estás asignado a otra mesa. No puedes cambiar de mesa."
                 )
+
+    my_photos: dict[int, ChallengePhoto] = {}
+    if user_id and user:
+        result = await db.execute(
+            select(ChallengePhoto).where(
+                ChallengePhoto.challenge_id.in_(select(Challenge.id).where(Challenge.table_id == table.id)),
+                ChallengePhoto.user_id == user_id,
+            )
+        )
+        my_photos = {cp.challenge_id: cp for cp in result.scalars().all()}
 
     result = await db.execute(
         select(Challenge)
@@ -156,6 +167,22 @@ async def get_table_by_qr(
             select(func.count(ChallengePhoto.id)).where(ChallengePhoto.challenge_id == c.id)
         )
         photo_count = photo_count_result.scalar() or 0
+        my_photo = my_photos.get(c.id)
+        my_photo_response = None
+        if my_photo:
+            my_photo_response = ChallengePhotoResponse(
+                id=my_photo.id,
+                uuid=my_photo.uuid,
+                path=my_photo.path,
+                thumbnail_path=my_photo.thumbnail_path,
+                message=my_photo.message,
+                challenge_id=my_photo.challenge_id,
+                user_id=my_photo.user_id,
+                user_alias=user.alias if user else None,
+                user_google_name=user.google_name if user else None,
+                user_google_photo=user.google_photo if user else None,
+                uploaded_at=my_photo.uploaded_at,
+            )
         challenge_responses.append(ChallengeResponse(
             id=c.id,
             table_id=c.table_id,
@@ -164,6 +191,7 @@ async def get_table_by_qr(
             photo_count=photo_count,
             max_photos=max_photos,
             locked=c.locked if c.locked is not None else False,
+            my_photo=my_photo_response,
             created_at=c.created_at,
         ))
 

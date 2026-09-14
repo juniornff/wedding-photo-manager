@@ -88,26 +88,13 @@ export default function MainPage() {
                 {info.novio1_name} & {info.novio2_name}
               </h1>
               <p className="text-lg text-white/90">{info.wedding_date}</p>
-              {info.winner_table_name && (
-                <p className="mt-4 text-lg font-semibold text-green-300">
-                  Mesa ganadora: {info.winner_table_name}
-                </p>
-              )}
             </div>
           </div>
         </section>
       )}
 
       <section className="max-w-6xl mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Galería de invitados</h2>
-          <a
-            href="/fotografo-secreto"
-            className="text-xs px-3 py-1.5 rounded-full border border-[var(--color-accent)] text-[var(--color-accent)] hover:bg-[var(--color-accent)] hover:text-white transition"
-          >
-            Tablero Fotógrafo Secreto
-          </a>
-        </div>
+        <h2 className="text-lg font-semibold mb-4">Galería de invitados</h2>
         <PhotoGrid fetchUrl="/api/gallery" emptyMessage="Sé el primero en subir una foto" />
       </section>
 
