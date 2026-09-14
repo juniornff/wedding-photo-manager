@@ -1,18 +1,37 @@
 # AGENTS.md — Wedding Photo Manager
 
 ## Project status
-Functional. Backend (FastAPI) and Frontend (React) are built and verified. Run via `docker compose up`. `README.md` contains the complete architecture with Mermaid diagrams (ER, use cases, sequences, states, component trees).
+Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. Run everything with `docker compose up` (backend :8000, frontend :5173). `README.md` is the canonical architecture reference (Mermaid ER/use-case/sequence/state/component diagrams); `plan.md` is the original spec.
+
+## Commands
+- **Run stack:** `docker compose up` — mounts root `Fotos/`, `Miniaturas/`, `data/` and the root `.env` into the backend container
+- **Backend local:** `uvicorn app.main:app --reload` from `backend/` — see Env loading below
+- **Frontend dev:** `npm run dev` from `frontend/` — Vite proxies `/api` → `http://localhost:8000`
+- **Frontend lint:** `npm run lint` (oxlint, config in `.oxlintrc.json` — not ESLint). No typecheck script
+- **Testing:** none yet. `backend/requirements-test.txt` is vestigial; no pytest/vitest suites, no `test` scripts
 
 ## Tech stack
-- **Backend**: FastAPI + SQLAlchemy (async) + SQLite (WAL mode)
-- **Backend libs**: Pillow (thumbnails), Authlib (OAuth), qrcode (QR gen)
-- **Frontend**: React + Vite + TailwindCSS + React Router
-- **Frontend HTTP**: fetch nativo + React Context (no axios, no Redux)
-- **Real-time**: Server-Sent Events (SSE)
-- **Storage**: Local filesystem (`Fotos/`, `Miniaturas/`)
-- **Deployment**: Docker Compose (backend + frontend); Caddy aparte
-- **Auth**: Google OAuth for cross-device sync; anonymous guests use localStorage UUID
-- **Testing**: pytest (backend) + Vitest (frontend)
+- **Backend:** FastAPI + SQLAlchemy (async) + SQLite (WAL) + pydantic-settings; libs Pillow (150×150 thumbnails), Authlib (Google OAuth), qrcode (table QRs)
+- **Frontend:** React 19 + Vite + Tailwind v4 + React Router; native `fetch` + React Context (no axios/Redux); SSE client
+- **Storage:** local filesystem `Fotos/` + `Miniaturas/` (mirrored structure); SQLite at `data/wedding.db` (path relative to CWD; `/app/data` in container)
+- **Auth:** Google OAuth (admin session cookie + guest identity recovery); anonymous guests via server-generated UUID stored in localStorage
+- **Deployment:** Docker Compose (backend + frontend); Caddy aparte
+
+## Env loading (.env)
+- Root `.env` is the single source of secrets (not versioned). docker-compose mounts it to `/app/.env`
+- `backend/app/config.py` reads env_file from two candidates (missing files are ignored):
+  1. `backend/.env` (= `/app/.env` in the container)
+  2. repo root `.env` — makes local runs outside Docker work
+- Real environment variables take precedence over dotenv files; `Settings` uses `extra="ignore"` so unknown vars are tolerated
+- For local backend runs outside Docker, run from the repo root (or export the values)
+
+## Backend layout & quirks
+- Routers under `app/routers/`: `main`, `auth`, `fotografo_secreto`, `admin`, `sse` — all mounted in `app/main.py`
+- Models live in a single `app/models/models.py`; schemas in `app/schemas/schemas.py`; services in `app/services/` (`photo_service`, `auth_service`, `sse_manager`)
+- **No Alembic.** Schema = `Base.metadata.create_all` at startup, plus hand-written `ALTER TABLE` statements in the `main.py` lifespan (`challenges.locked`, `wedding_info.carousel_interval`). `create_all` never alters existing tables; adding a column to an existing DB must follow the same try/except `ALTER TABLE` pattern (SQLite has no `ADD COLUMN IF NOT EXISTS`)
+- Uploaded files served as static mounts: `/api/uploads` → `Fotos/`, `/api/thumbnails` → `Miniaturas/`
+- Background task cleans orphan files every `ORPHAN_CLEANUP_INTERVAL` (default 10s)
+- **Backend container runs as UID 1000** (`entrypoint.sh` fits `setuid(1000)`) — deliberate decision so files it writes match the host user; don't change without considering file ownership
 
 ## Architecture — 3 modules
 | Module | Purpose |
@@ -56,15 +75,8 @@ Functional. Backend (FastAPI) and Frontend (React) are built and verified. Run v
 - QR generado como PNG estático en `Fotos/Fotografo-Secreto/Mesa-XX/QR.png`
 - Admin elige ganador subjetivamente; vista en grilla agrupada por reto
 
-## Database entities (derived from plan)
-- **User** — anonymous (uuid + alias) or Google-authenticated; `table_id` asignado una vez; guarda `google_name`, `google_photo`
-- **WeddingInfo** — couple names, date, color scheme, `winner_table_id`
-- **CarouselPhoto** — carousel images (ordered)
-- **GalleryPhoto** — guest uploads in main module
-- **Table** — mesas with unique QR links
-- **Challenge** — retos linked to a table (10 per table)
-- **ChallengePhoto** — per-reto submissions (1/user/reto, max = nro participantes mesa)
-- **Admin** — wedding couple credentials
+## Database entities
+Canonical ER diagram in `README.md`. Summary: **User** (anonymous uuid+alias or Google-authenticated; `table_id` set once; `google_name`, `google_photo`), **WeddingInfo** (couple names, date, color scheme, `winner_table_id`, `carousel_interval`), **CarouselPhoto**, **GalleryPhoto**, **Table** (unique QR links), **Challenge** (10 per table), **ChallengePhoto** (1/user/reto), **Admin** (credentials).
 
 ## Conventions
 - `README.md` is the canonical architecture reference with Mermaid diagrams
