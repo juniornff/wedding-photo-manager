@@ -190,3 +190,32 @@ class TablePhotosResponse(BaseModel):
     challenge_id: int
     challenge_description: str
     photos: list[ChallengePhotoResponse]
+
+
+class DashboardChallengeResponse(BaseModel):
+    id: int
+    table_id: int
+    description: str
+    sort_order: int
+    photo_count: int = 0
+    max_photos: int = 0
+    locked: bool = False
+    photos: list[ChallengePhotoResponse] = []
+
+    model_config = {"from_attributes": True}
+
+
+class DashboardTableResponse(BaseModel):
+    id: int
+    name: str
+    photo_count: int = 0
+    max_photos: int = 0
+    challenges: list[DashboardChallengeResponse] = []
+
+    model_config = {"from_attributes": True}
+
+
+class PhotographerDashboardResponse(BaseModel):
+    winner_table_id: Optional[int] = None
+    winner_table_name: Optional[str] = None
+    tables: list[DashboardTableResponse] = []

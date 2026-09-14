@@ -36,9 +36,17 @@ export default function Navbar() {
   return (
     <nav className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-[var(--color-secondary)]">
       <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="flex items-center gap-4">
         <a href="/" className="font-bold text-lg" style={{ color: 'var(--color-primary)' }}>
           Wedding Photo
         </a>
+        <a
+          href="/fotografo-secreto"
+          className="text-sm text-gray-500 hover:text-[var(--color-accent)] transition"
+        >
+          Fotógrafo Secreto
+        </a>
+      </div>
 
         <div className="flex items-center gap-3">
           {(user || isAdmin) ? (

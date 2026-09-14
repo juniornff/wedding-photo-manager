@@ -99,7 +99,15 @@ export default function MainPage() {
       )}
 
       <section className="max-w-6xl mx-auto px-4 py-6">
-        <h2 className="text-lg font-semibold mb-4">Galería de invitados</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Galería de invitados</h2>
+          <a
+            href="/fotografo-secreto"
+            className="text-xs px-3 py-1.5 rounded-full border border-[var(--color-accent)] text-[var(--color-accent)] hover:bg-[var(--color-accent)] hover:text-white transition"
+          >
+            Tablero Fotógrafo Secreto
+          </a>
+        </div>
         <PhotoGrid fetchUrl="/api/gallery" emptyMessage="Sé el primero en subir una foto" />
       </section>
 

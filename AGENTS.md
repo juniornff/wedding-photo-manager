@@ -44,6 +44,7 @@ Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. 
 | Path | Component |
 |---|---|
 | `/` | MainPage (info boda, carrusel, galería, botón subida) |
+| `/fotografo-secreto` | SecretDashboardPage (tablero público en vivo de mesas/retos/fotos, ganador con animación) |
 | `/fotografo-secreto/:qr_code` | FotografoSecretoPage (mesa + retos) |
 | `/admin` | AdminPage (panel de control) |
 
@@ -70,10 +71,12 @@ Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. 
 - Sensitive config in `.env`
 
 ### Fotógrafo Secreto specifics
+- `GET /api/secret-photographer/dashboard` (público, sin auth): tablero completo → mesas → retos → fotos (con autor y mensaje) + `winner_table_id/name` desde WeddingInfo
 - Un usuario se asigna a una mesa una sola vez (campo `table_id` en User); error si reasigna
 - Reto bloqueado al alcanzar el número de participantes de la mesa; admin puede desbloquear solo para editar/eliminar
 - QR generado como PNG estático en `Fotos/Fotografo-Secreto/Mesa-XX/QR.png`
 - Admin elige ganador subjetivamente; vista en grilla agrupada por reto
+- El dashboard público escucha SSE (`new_challenge_photo`, `challenge_photo_deleted`, `winner_selected`) con un EventSource propio (no depende del login); confetti + resaltado al elegirse ganador
 
 ## Database entities
 Canonical ER diagram in `README.md`. Summary: **User** (anonymous uuid+alias or Google-authenticated; `table_id` set once; `google_name`, `google_photo`), **WeddingInfo** (couple names, date, color scheme, `winner_table_id`, `carousel_interval`), **CarouselPhoto**, **GalleryPhoto**, **Table** (unique QR links), **Challenge** (10 per table), **ChallengePhoto** (1/user/reto), **Admin** (credentials).

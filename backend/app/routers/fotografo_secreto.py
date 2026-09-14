@@ -3,19 +3,115 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.models import Table, Challenge, ChallengePhoto, User
+from app.models.models import Table, Challenge, ChallengePhoto, User, WeddingInfo
 from app.schemas.schemas import (
     TableWithChallengesResponse,
     ChallengeResponse,
     ChallengeDetailResponse,
     ChallengePhotoResponse,
     ChallengeUploadResponse,
+    DashboardChallengeResponse,
+    DashboardTableResponse,
+    PhotographerDashboardResponse,
 )
 from app.services.photo_service import validate_file, save_photo, generate_thumbnail, check_rate_limit
 from app.services.sse_manager import sse_manager
 from app.config import settings
 
 secret_router = APIRouter(prefix="/api/secret-photographer", tags=["secret-photographer"])
+
+
+@secret_router.get("/dashboard", response_model=PhotographerDashboardResponse)
+async def get_dashboard(db: AsyncSession = Depends(get_db)):
+    winner_table_id = None
+    winner_table_name = None
+
+    result = await db.execute(select(WeddingInfo).limit(1))
+    info = result.scalar_one_or_none()
+    if info and info.winner_table_id:
+        winner_table_id = info.winner_table_id
+        result = await db.execute(select(Table).where(Table.id == winner_table_id))
+        winner_table = result.scalar_one_or_none()
+        if winner_table:
+            winner_table_name = winner_table.name
+
+    result = await db.execute(select(Table).order_by(Table.id))
+    tables = result.scalars().all()
+
+    result = await db.execute(
+        select(Challenge)
+        .where(Challenge.table_id.in_([t.id for t in tables]))
+        .order_by(Challenge.sort_order, Challenge.id)
+    )
+    challenges = result.scalars().all()
+
+    photos_by_challenge: dict[int, list[ChallengePhotoResponse]] = {}
+    challenge_ids = [c.id for c in challenges]
+    if challenge_ids:
+        result = await db.execute(
+            select(ChallengePhoto, User)
+            .join(User, ChallengePhoto.user_id == User.id)
+            .where(ChallengePhoto.challenge_id.in_(challenge_ids))
+            .order_by(ChallengePhoto.uploaded_at)
+        )
+        for cp, user in result.all():
+            photos_by_challenge.setdefault(cp.challenge_id, []).append(
+                ChallengePhotoResponse(
+                    id=cp.id,
+                    uuid=cp.uuid,
+                    path=cp.path,
+                    thumbnail_path=cp.thumbnail_path,
+                    message=cp.message,
+                    challenge_id=cp.challenge_id,
+                    user_id=cp.user_id,
+                    user_alias=user.alias,
+                    user_google_name=user.google_name,
+                    user_google_photo=user.google_photo,
+                    uploaded_at=cp.uploaded_at,
+                )
+            )
+
+    max_by_table: dict[int, int] = {}
+    if tables:
+        result = await db.execute(
+            select(User.table_id, func.count(User.id))
+            .where(User.table_id.in_([t.id for t in tables]))
+            .group_by(User.table_id)
+        )
+        max_by_table = dict(result.all())
+
+    challenges_by_table: dict[int, list[DashboardChallengeResponse]] = {}
+    for c in challenges:
+        photos = photos_by_challenge.get(c.id, [])
+        challenges_by_table.setdefault(c.table_id, []).append(
+            DashboardChallengeResponse(
+                id=c.id,
+                table_id=c.table_id,
+                description=c.description,
+                sort_order=c.sort_order,
+                photo_count=len(photos),
+                max_photos=max_by_table.get(c.table_id, 0),
+                locked=c.locked if c.locked is not None else False,
+                photos=photos,
+            )
+        )
+
+    table_responses = []
+    for t in tables:
+        table_challenges = challenges_by_table.get(t.id, [])
+        table_responses.append(DashboardTableResponse(
+            id=t.id,
+            name=t.name,
+            photo_count=sum(c.photo_count for c in table_challenges),
+            max_photos=sum(c.max_photos for c in table_challenges),
+            challenges=table_challenges,
+        ))
+
+    return PhotographerDashboardResponse(
+        winner_table_id=winner_table_id,
+        winner_table_name=winner_table_name,
+        tables=table_responses,
+    )
 
 
 @secret_router.get("/table/{qr_code}", response_model=TableWithChallengesResponse)
