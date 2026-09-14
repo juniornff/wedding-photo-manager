@@ -92,7 +92,25 @@ async def update_wedding_info(
 
     await db.commit()
     await db.refresh(info)
-    return info
+
+    winner_table_name = None
+    if info.winner_table_id:
+        table_result = await db.execute(select(Table).where(Table.id == info.winner_table_id))
+        winner_table = table_result.scalar_one_or_none()
+        if winner_table:
+            winner_table_name = winner_table.name
+
+    payload = WeddingInfoResponse(
+        novio1_name=info.novio1_name,
+        novio2_name=info.novio2_name,
+        wedding_date=info.wedding_date,
+        color_scheme=info.color_scheme,
+        carousel_interval=info.carousel_interval or 5,
+        winner_table_id=info.winner_table_id,
+        winner_table_name=winner_table_name,
+    )
+    await sse_manager.broadcast("info_updated", payload.model_dump(mode="json"))
+    return payload
 
 
 @admin_router.get("/carousel", response_model=list[CarouselPhotoResponse])

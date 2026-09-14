@@ -52,6 +52,9 @@ export default function MainPage() {
     if (lastEvent.type === 'new_photo') {
       window.dispatchEvent(new CustomEvent('refresh-gallery'));
     }
+    if (lastEvent.type === 'gallery_photo_deleted') {
+      window.dispatchEvent(new CustomEvent('refresh-gallery'));
+    }
   }, [lastEvent]);
 
   const handleNewPhoto = useCallback(() => {
