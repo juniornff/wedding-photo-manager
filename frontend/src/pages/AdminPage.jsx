@@ -643,10 +643,16 @@ function WinnerTab() {
   const [tables, setTables] = useState([]);
   const [selectedTable, setSelectedTable] = useState(null);
   const [challengePhotos, setChallengePhotos] = useState([]);
+  const [currentWinner, setCurrentWinner] = useState(null);
+
+  const loadWinner = useCallback(() => {
+    api('/api/wedding-info').then(setCurrentWinner).catch(() => {});
+  }, []);
 
   useEffect(() => {
     api('/api/admin/tables').then(setTables).catch(() => {});
-  }, []);
+    loadWinner();
+  }, [loadWinner]);
 
   useEffect(() => {
     if (!selectedTable) return;
@@ -658,7 +664,19 @@ function WinnerTab() {
   const handleSelectWinner = async (tableId) => {
     try {
       await api(`/api/admin/select-winner?table_id=${tableId}`, { method: 'POST' });
+      loadWinner();
       alert('¡Ganador seleccionado!');
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleClearWinner = async () => {
+    if (!confirm('¿Quitar el ganador actual?')) return;
+    try {
+      await api('/api/admin/select-winner', { method: 'DELETE' });
+      loadWinner();
+      alert('Ganador deseleccionado.');
     } catch (err) {
       alert(err.message);
     }
@@ -707,6 +725,20 @@ function WinnerTab() {
         >
           Seleccionar como ganador
         </button>
+      )}
+
+      {currentWinner?.winner_table_id && (
+        <div className="mt-8 p-4 rounded-xl border-2 border-yellow-300 bg-yellow-50 flex items-center justify-between gap-4">
+          <p className="text-sm font-semibold text-yellow-800">
+            🏆 Ganador actual: {currentWinner.winner_table_name || `Mesa ${currentWinner.winner_table_id}`}
+          </p>
+          <button
+            onClick={handleClearWinner}
+            className="px-4 py-2 rounded-lg bg-red-100 text-red-600 text-sm hover:bg-red-200 transition cursor-pointer shrink-0"
+          >
+            Quitar ganador
+          </button>
+        </div>
       )}
     </div>
   );

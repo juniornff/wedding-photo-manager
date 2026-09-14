@@ -77,7 +77,7 @@ export default function SecretDashboardPage() {
       newIdsRef.current = delta;
 
       const winner = data.winner_table_id ?? null;
-      if (prevWinnerRef.current !== null && winner !== prevWinnerRef.current) {
+      if (winner && winner !== prevWinnerRef.current) {
         setConfetti(true);
         setTimeout(() => setConfetti(false), 6000);
       }

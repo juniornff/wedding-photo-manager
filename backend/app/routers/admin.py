@@ -534,6 +534,20 @@ async def select_winner(table_id: int, db: AsyncSession = Depends(get_db)):
     return {"message": "Ganador seleccionado.", "table_id": table_id}
 
 
+@admin_router.delete("/select-winner")
+async def clear_winner(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(WeddingInfo).limit(1))
+    info = result.scalar_one_or_none()
+    if not info:
+        raise HTTPException(status_code=404, detail="Información de la boda no encontrada.")
+
+    info.winner_table_id = None
+    await db.commit()
+
+    await sse_manager.broadcast("winner_selected", {"table_id": None})
+    return {"message": "Ganador deseleccionado.", "table_id": None}
+
+
 @admin_router.get("/tables/{table_id}/qr")
 async def get_table_qr(table_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Table).where(Table.id == table_id))
