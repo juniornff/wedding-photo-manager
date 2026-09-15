@@ -129,7 +129,9 @@ export default function PrivacyPage() {
             .
           </Li>
           <Li>
-            La web está alojada en un proveedor de hosting que almacena los datos en sus servidores.
+            La web está alojada en un <strong>servidor privado</strong> de los novios (no se utiliza
+            ningún proveedor de hosting externo). Cloudflare actúa únicamente como gestor de dominio
+            y DNS, sin almacenar las fotos ni los datos de la web.
           </Li>
           <Li>No utilizamos herramientas de analítica ni de publicidad de terceros.</Li>
         </ul>
