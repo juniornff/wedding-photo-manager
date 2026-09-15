@@ -749,14 +749,18 @@ function UsersTab() {
                         <div>
                           <p className="font-medium">
                             {u.google_name || u.alias}
-                            {u.role === 'admin' && (
+                            {u.role === 'admin' ? (
                               <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium align-middle">
                                 Admin
+                              </span>
+                            ) : (
+                              <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600 font-medium align-middle">
+                                Invitado
                               </span>
                             )}
                           </p>
                           <p className="text-xs text-gray-400">
-                            {u.email || u.alias}
+                            {u.email}
                             {u.google_auth && <span className="ml-1 text-blue-500">• Google</span>}
                           </p>
                         </div>
