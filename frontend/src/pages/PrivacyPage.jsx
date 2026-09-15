@@ -28,7 +28,7 @@ export default function PrivacyPage() {
     <LegalLayout title="Política de Privacidad" updated="15 de septiembre de 2026">
       <Section title="1. Responsable del tratamiento">
         <P>
-          Esta web (la "Boda Photo") es gestionada por los novios, responsables del tratamiento de
+          Esta web (la "Wedding Photo Manager") es gestionada por los novios, responsables del tratamiento de
           los datos recogidos a través de la misma. Para cualquier consulta puedes escribir a{' '}
           <a href="mailto:juniornff@gmail.com" className="text-[var(--color-accent)] underline">
             juniornff@gmail.com

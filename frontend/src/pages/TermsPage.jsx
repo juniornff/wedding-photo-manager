@@ -28,7 +28,7 @@ export default function TermsPage() {
     <LegalLayout title="Condiciones del Servicio" updated="15 de septiembre de 2026">
       <Section title="1. Aceptación de las condiciones">
         <P>
-          Al usar la web de la boda (la "Boda Photo"), y especialmente al subir fotos o iniciar
+          Al usar la web de la boda (la "Wedding Photo Manager"), y especialmente al subir fotos o iniciar
           sesión con Google, aceptas estas condiciones del servicio. Si no estás de acuerdo, por
           favor no utilices la web.
         </P>

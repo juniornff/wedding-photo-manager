@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthProvider';
 import { SSEProvider } from './context/SSEProvider';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import ScrollToTop from './components/ScrollToTop';
 import MainPage from './pages/MainPage';
 import FotografoSecretoPage from './pages/FotografoSecretoPage';
 import SecretDashboardPage from './pages/SecretDashboardPage';
@@ -13,6 +14,7 @@ import TermsPage from './pages/TermsPage';
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <AuthProvider>
         <SSEProvider>
           <Navbar />
