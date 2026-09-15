@@ -694,6 +694,7 @@ Opcionales (defaults en `Settings`): `ORPHAN_CLEANUP_INTERVAL=10`, `FRONTEND_URL
 - `docker compose up --build` levanta backend y frontend (**LAN/dev**). El frontend usa **API relativa**: Vite proxya `/api/*` al backend `http://backend:8000` (env `VITE_PROXY_TARGET`), por lo que la misma web funciona en `localhost` y en cualquier IP/Máquina de la red (`FRONTEND_URL` controla CORS y redirects OAuth).
 - Host LAN: backend publicado en **`localhost:8001`** (→ contenedor `:8000`), frontend en `0.0.0.0:5173` (accesible desde otros dispositivos vía `http://<IP>:5173`). Vite acepta cualquier Host (`allowedHosts`).
 - Para **producción** (Caddy + Cloudflare): usar `docker compose -f docker-compose.prod.yml up -d --build` — sin puertos de host, frontend y backend en la red externa `proxy-net` para que Caddy los alcance. Bloque de Caddy en `Caddyfile.md`.
+- **Páginas legales OAuth** (`/privacidad` y `/terminos`, públicas y con los nombres de los novios vía `GET /api/wedding-info`): Google las exige (Política de Privacidad y Condiciones, enlazadas desde la homepage) en el OAuth consent screen de apps que usan OAuth. Registrar en la consola de Google las URLs `https://boda.nehemiasfeliz.com/privacidad` y `.../terminos`
 - Para correr el backend local fuera de Docker: `uvicorn app.main:app --reload` desde `backend/` (lee el `.env` raíz).
 - Dev frontend: `npm run dev` en `frontend/` (Vite proxya `/api` → `VITE_PROXY_TARGET` o `http://localhost:8000` por defecto).
 

@@ -26,6 +26,7 @@ Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. 
 - Real environment variables take precedence over dotenv files; `Settings` uses `extra="ignore"` so unknown vars are tolerated
 - `FRONTEND_URL` apunta al origen canónico del frontend: lo usa CORS, los redirects post-OAuth y el `redirect_uri` de Google. En LAN es `http://localhost:5173`; en producción `https://boda.nehemiasfeliz.com`. **Google solo admite `localhost` o dominios públicos en `redirect_uri`** (jamás IPs privadas); los orígenes LAN extra que pidan CORS (p.ej. el móvil por `http://10.0.0.4:5173`) van en `CORS_ALLOWED_ORIGINS` (CSV)
 - Tras el login de Google de un invitado, el backend redirige a `FRONTEND_URL/?google_user={id}`; `AuthProvider` lee el query param, guarda en localStorage la identidad y limpia la URL (`history.replaceState`). El botón "Conectar Google" de la navbar (`/api/google?user_id=`) vincula la cuenta del invitado existente
+- **Google exige páginas legales públicas:** el OAuth consent screen pide URL de *Política de Privacidad* y *Condiciones del Servicio* (`/privacidad` y `/terminos` en `FRONTEND_URL`) y una homepage que enlace a ambas (requisito para apps en producción con OAuth; los scopes `openid/email/profile` no requieren verificación de Google)
 - For local backend runs outside Docker, run from the repo root (or export the values)
 - **No frontend .env** — la API es **relativa** (`import.meta.env.VITE_API_URL || ''`, sin ARG build). El frontend contenedor recibe `VITE_PROXY_TARGET=http://backend:8000` (runtime env que el `<proxy>` de `vite.config.js` usa como target); dev local usa el default `http://localhost:8000`
 - **Avatares de Google:** `index.html` fija `<meta name="referrer" content="no-referrer">`. Google devuelve **429** a las imágenes de perfil (`lh3.googleusercontent.com`) cuando el `Referer` es `http` (localhost/IP LAN); sin referer cargan en dev y en producción. No rompe la API (no usa Referer; CORS va por `Origin`)
@@ -70,6 +71,7 @@ The backend broadcasts these named events via `sse_manager.broadcast()`:
 | `/fotografo-secreto` | SecretDashboardPage (tablero público en vivo de mesas/retos/fotos, ganador con animación) |
 | `/fotografo-secreto/:qr_code` | FotografoSecretoPage (mesa + retos, foto propia por reto) |
 | `/admin` | AdminPage (panel de control con tabs: Dashboard, Info Boda, Carrusel, Mesas, Retos, Galería, Usuarios, Ganador) |
+| `/privacidad`, `/terminos` | PrivacyPage / TermsPage (política de privacidad y condiciones; públicas, nombres de los novios dinámicos vía `GET /api/wedding-info`; contacto `juniornff@gmail.com`) |
 
 ## Key business rules
 - No login for guests — name/alias stored in localStorage + DB; anonymous UUID per device
