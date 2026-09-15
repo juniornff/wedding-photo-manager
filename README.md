@@ -15,7 +15,7 @@ Aplicación web para gestionar fotos de bodas: subida, visualización y descarga
 | Tiempo real | Server-Sent Events (SSE) |
 | Almacenamiento | Local filesystem (`Fotos/`, `Miniaturas/`), SQLite en `data/wedding.db` |
 | Autenticación | Google OAuth + UUID anónimo (localStorage) |
-| Despliegue | Docker Compose (backend + frontend); Caddy aparte |
+| Despliegue | Docker Compose (backend + frontend); Caddy + Cloudflare en producción |
 | Testing | Sin suites por el momento |
 
 ---
@@ -688,11 +688,11 @@ Opcionales (defaults en `Settings`, no hace falta ponerlas en `.env`): `ORPHAN_C
 
 ## Puesta en marcha
 
-- `docker compose up --build` levanta backend y frontend.
-- Host: backend publicado en **`localhost:8001`** (→ contenedor `:8000`), frontend en `localhost:5173`.
-- `VITE_API_URL=http://localhost:8001` se inyecta como **build-time ARG** (si cambia el puerto, reconstruir con `docker compose build --build-arg VITE_API_URL=...`).
+- `docker compose up --build` levanta backend y frontend (**LAN/dev**). El frontend usa **API relativa**: Vite proxya `/api/*` al backend `http://backend:8000` (env `VITE_PROXY_TARGET`), por lo que la misma web funciona en `localhost` y en cualquier IP/Máquina de la red (`FRONTEND_URL` controla CORS y redirects OAuth).
+- Host LAN: backend publicado en **`localhost:8001`** (→ contenedor `:8000`), frontend en `0.0.0.0:5173` (accesible desde otros dispositivos vía `http://<IP>:5173`). Vite acepta cualquier Host (`allowedHosts`).
+- Para **producción** (Caddy + Cloudflare): usar `docker compose -f docker-compose.prod.yml up -d --build` — sin puertos de host, frontend y backend en la red externa `proxy-net` para que Caddy los alcance. Bloque de Caddy en `Caddyfile.md`.
 - Para correr el backend local fuera de Docker: `uvicorn app.main:app --reload` desde `backend/` (lee el `.env` raíz).
-- Dev frontend: `npm run dev` en `frontend/` (Vite proxya `/api` → `http://localhost:8000`).
+- Dev frontend: `npm run dev` en `frontend/` (Vite proxya `/api` → `VITE_PROXY_TARGET` o `http://localhost:8000` por defecto).
 
 ---
 

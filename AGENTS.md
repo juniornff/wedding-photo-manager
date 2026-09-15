@@ -1,13 +1,14 @@
 # AGENTS.md — Wedding Photo Manager
 
 ## Project status
-Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. Run everything with `docker compose up` (backend :8001→:8000 in container, frontend exposed on host :8001). `README.md` is the canonical architecture reference (Mermaid ER/use-case/sequence/state/component diagrams); `plan.md` is the original spec.
+Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. Run everything with `docker compose up` (backend :8001→:8000 in container, frontend exposed on host :5173). `README.md` is the canonical architecture reference (Mermaid ER/use-case/sequence/state/component diagrams); `plan.md` is the original spec.
 
 ## Commands
-- **Run stack:** `docker compose up` — mounts root `Fotos/`, `Miniaturas/`, `data/` and the root `.env` into the backend container. Use `docker compose up -d --build` after changing `.env` (VITE_API_URL is a build-time ARG)
+- **Run stack:** `docker compose up` — mounts root `Fotos/`, `Miniaturas/`, `data/` and the root `.env` into the backend container. Use `docker compose up -d --build` after changing `.env`
 - **Backend local:** `uvicorn app.main:app --reload` from `backend/` — run from repo root so `config.py` finds root `.env`
-- **Frontend dev:** `npm run dev` from `frontend/` — Vite proxies `/api` → `http://localhost:8000`
+- **Frontend dev:** `npm run dev` from `frontend/` — Vite proxies `/api` → `VITE_PROXY_TARGET` (default `http://localhost:8000`)
 - **Frontend lint:** `npm run lint` (oxlint, config in `.oxlintrc.json` — not ESLint). No typecheck script
+- **Prod deploy:** `docker compose -f docker-compose.prod.yml up -d --build` on the home server (Caddy block in `Caddyfile.md`)
 - **Testing:** none yet. `backend/requirements-test.txt` is vestigial; no pytest/vitest suites, no `test` scripts
 
 ## Tech stack
@@ -15,7 +16,7 @@ Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. 
 - **Frontend:** React 19 + Vite + Tailwind v4 + React Router; native `fetch` + React Context (no axios/Redux); SSE client
 - **Storage:** local filesystem `Fotos/` + `Miniaturas/` (mirrored structure); SQLite at `data/wedding.db` (path relative to CWD; `/app/data` in container)
 - **Auth:** Google OAuth (admin session cookie + guest identity recovery); anonymous guests via server-generated UUID stored in localStorage
-- **Deployment:** Docker Compose (backend + frontend); Caddy aparte
+- **Deployment:** Docker Compose (backend + frontend); Caddy + Cloudflare en producción
 
 ## Env loading (.env)
 - Root `.env` is the **single** source of secrets (not versioned). docker-compose mounts it to `/app/.env`. **No `.env.example`** exists.
@@ -24,7 +25,7 @@ Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. 
   2. repo root `.env` — makes local runs outside Docker work
 - Real environment variables take precedence over dotenv files; `Settings` uses `extra="ignore"` so unknown vars are tolerated
 - For local backend runs outside Docker, run from the repo root (or export the values)
-- **No frontend .env** — `VITE_API_URL` is baked at build time via Dockerfile ARG (`docker compose up -d --build`)
+- **No frontend .env** — la API es **relativa** (`import.meta.env.VITE_API_URL || ''`, sin ARG build). El frontend contenedor recibe `VITE_PROXY_TARGET=http://backend:8000` (runtime env que el `<proxy>` de `vite.config.js` usa como target); dev local usa el default `http://localhost:8000`
 
 ## Backend layout & quirks
 - Routers under `app/routers/`: `main`, `auth`, `fotografo_secreto`, `admin`, `sse` — all mounted in `app/main.py`

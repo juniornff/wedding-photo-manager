@@ -1,0 +1,31 @@
+services:
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    networks:
+      - default
+      - proxy-net
+    volumes:
+      - ./Fotos:/app/Fotos
+      - ./Miniaturas:/app/Miniaturas
+      - ./data:/app/data
+      - ./.env:/app/.env
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - VITE_PROXY_TARGET=http://backend:8000
+    networks:
+      - default
+      - proxy-net
+    depends_on:
+      - backend
+
+networks:
+  proxy-net:
+    external: true

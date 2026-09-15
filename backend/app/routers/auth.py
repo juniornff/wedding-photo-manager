@@ -46,7 +46,7 @@ async def get_current_guest(
 
 @auth_router.get("/google")
 async def google_login(request: Request, user_id: int | None = None):
-    redirect_uri = str(request.url_for("google_callback"))
+    redirect_uri = f"{settings.FRONTEND_URL}/api/google/callback"
     state = str(user_id) if user_id else None
     return await oauth.google.authorize_redirect(request, redirect_uri, state=state)
 
