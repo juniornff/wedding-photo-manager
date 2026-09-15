@@ -627,7 +627,7 @@ Miniaturas/
 | POST/DELETE | `/api/admin/select-winner` | Admin | Elegir/quitar ganador |
 | GET/POST/DELETE | `/api/admin/carousel`, `/gallery` | Admin | Gestión carrusel/galería |
 | PUT | `/api/admin/wedding-info` | Admin | Editar info boda/colores |
-| GET | `/api/admin/users` | Admin | Listar usuarios (alias, Google, mesa, fotos, fecha) |
+| GET | `/api/admin/users` | Admin | Listar usuarios (alias o nombre Google, rol Admin/Invitado, email, Google vinculado, mesa, fotos, fecha) |
 | PUT | `/api/admin/users/{id}` | Admin | Renombrar alias |
 | PATCH | `/api/admin/users/{id}/table` | Admin | Asignar/quitar mesa |
 | DELETE | `/api/admin/users/{id}?delete_photos=false` | Admin | Borrar usuario; `false` anonimiza sus fotos (galería+retos), `true` las elimina con sus archivos |
@@ -639,6 +639,7 @@ Miniaturas/
 - Los invitados **no necesitan login** — se identifican por UUID en localStorage
 - El **UUID lo genera el servidor** (`uuid4` aleatorio), se guarda en DB y se devuelve al cliente
 - Google OAuth permite **recuperar identidad** entre dispositivos; al vincularse, el alias se reemplaza por el nombre de Google y se muestra su foto de perfil
+- **Avatares de Google** (`lh3.googleusercontent.com`): responden **429** cuando el `Referer` de la petición es un origen HTTP inseguro (localhost/IP LAN). La app fija `<meta name="referrer" content="no-referrer">` en `index.html` para que las imágenes de perfil carguen en dev/LAN (y de igual forma en producción)
 - Solo imágenes (validación por **MIME type real** inspeccionando bytes + extensión) — **todos los formatos**, máx **25 MB**
 - Nombres de archivo con **UUID** para evitar colisiones
 - **Miniatura 150×150px** manteniendo aspect ratio
@@ -652,7 +653,7 @@ Miniaturas/
 - Cada participante ve **solo su propia foto** por reto; los espectadores ven **todas** en el dashboard público
 - Dashboard público **en vivo sin login** (EventSource propio); confetti + resaltado al elegir ganador
 - Admin puede **seleccionar y deseleccionar** el ganador; se notifica por SSE
-- **Admin**: los administradores son `User` con `role='admin'` (sin modelo `Admin`): al arranque se hace upsert de `ADMIN_EMAIL`, `NOVIO_EMAIL` y `NOVIA_EMAIL` desde `.env`, cada uno con su password (`ADMIN_PASSWORD`/`NOVIO_PASSWORD`/`NOVIA_PASSWORD`). Login por password (`POST /api/auth/admin`) o Google OAuth; un Google login con correo admin **fusiona** automáticamente la identidad previa de invitado (fotos + mesa) en la cuenta admin
+- **Admin**: los administradores son `User` con `role='admin'` (sin modelo `Admin`): al arranque se hace upsert de `ADMIN_EMAIL`, `NOVIO_EMAIL` y `NOVIA_EMAIL` desde `.env`, cada uno con su password (`ADMIN_PASSWORD`/`NOVIO_PASSWORD`/`NOVIA_PASSWORD`). Login por password (`POST /api/admin/login`) o Google OAuth; un Google login con correo admin **fusiona** automáticamente la identidad previa de invitado (fotos + mesa) en la cuenta admin
 - `Miniaturas/` replica exactamente la estructura de `Fotos/`
 - **Limpieza de archivos huérfanos** cada 10s (`ORPHAN_CLEANUP_INTERVAL`)
 - **SQLite con WAL mode** para concurrencia; sin backups automáticos
