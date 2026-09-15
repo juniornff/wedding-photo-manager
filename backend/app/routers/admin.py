@@ -425,7 +425,7 @@ async def get_challenge_photos(challenge_id: int, db: AsyncSession = Depends(get
 
     result = await db.execute(
         select(ChallengePhoto, User)
-        .join(User, ChallengePhoto.user_id == User.id)
+        .outerjoin(User, ChallengePhoto.user_id == User.id)
         .where(ChallengePhoto.challenge_id == challenge_id)
         .order_by(ChallengePhoto.uploaded_at)
     )
@@ -439,9 +439,9 @@ async def get_challenge_photos(challenge_id: int, db: AsyncSession = Depends(get
             message=cp.message,
             challenge_id=cp.challenge_id,
             user_id=cp.user_id,
-            user_alias=user.alias,
-            user_google_name=user.google_name,
-            user_google_photo=user.google_photo,
+            user_alias=user.alias if user else None,
+            user_google_name=user.google_name if user else None,
+            user_google_photo=user.google_photo if user else None,
             uploaded_at=cp.uploaded_at,
         )
         for cp, user in rows
@@ -508,7 +508,7 @@ async def get_table_photos(table_id: int, db: AsyncSession = Depends(get_db)):
     for challenge in challenges:
         result = await db.execute(
             select(ChallengePhoto, User)
-            .join(User, ChallengePhoto.user_id == User.id)
+            .outerjoin(User, ChallengePhoto.user_id == User.id)
             .where(ChallengePhoto.challenge_id == challenge.id)
             .order_by(ChallengePhoto.uploaded_at)
         )
@@ -522,9 +522,9 @@ async def get_table_photos(table_id: int, db: AsyncSession = Depends(get_db)):
                 message=cp.message,
                 challenge_id=cp.challenge_id,
                 user_id=cp.user_id,
-                user_alias=user.alias,
-                user_google_name=user.google_name,
-                user_google_photo=user.google_photo,
+                user_alias=user.alias if user else None,
+                user_google_name=user.google_name if user else None,
+                user_google_photo=user.google_photo if user else None,
                 uploaded_at=cp.uploaded_at,
             )
             for cp, user in rows
@@ -685,3 +685,64 @@ async def update_user_table(user_id: int, payload: UserTableUpdate, db: AsyncSes
     await db.commit()
     db.expire_all()
     return await _fresh_user_response(user_id, db)
+
+
+@admin_router.delete("/users/{user_id}", status_code=204)
+async def delete_user(user_id: int, delete_photos: bool = False, db: AsyncSession = Depends(get_db)):
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+
+    if user.google_id and user.google_id.startswith("admin:"):
+        raise HTTPException(status_code=400, detail="No se puede eliminar la cuenta del administrador.")
+
+    result = await db.execute(select(ChallengePhoto).where(ChallengePhoto.user_id == user_id))
+    challenge_photos = result.scalars().all()
+
+    result = await db.execute(select(GalleryPhoto).where(GalleryPhoto.user_id == user_id))
+    gallery_photos = result.scalars().all()
+
+    affected_challenge_ids: set[int] = set()
+
+    if delete_photos:
+        for cp in challenge_photos:
+            delete_photo(cp.path, cp.thumbnail_path)
+            affected_challenge_ids.add(cp.challenge_id)
+            await db.delete(cp)
+            await sse_manager.broadcast("challenge_photo_deleted", {
+                "photo_id": cp.id,
+                "challenge_id": cp.challenge_id,
+            })
+
+        for gp in gallery_photos:
+            delete_photo(gp.path, gp.thumbnail_path)
+            await db.delete(gp)
+            await sse_manager.broadcast("gallery_photo_deleted", {"photo_id": gp.id})
+
+        for cid in affected_challenge_ids:
+            challenge = await db.get(Challenge, cid)
+            if not challenge or not challenge.locked:
+                continue
+            photo_count = (await db.execute(
+                select(func.count(ChallengePhoto.id)).where(ChallengePhoto.challenge_id == cid)
+            )).scalar() or 0
+            max_photos = (await db.execute(
+                select(func.count(User.id)).where(User.table_id == challenge.table_id)
+            )).scalar() or 0
+            if photo_count < max_photos:
+                challenge.locked = False
+    else:
+        if challenge_photos:
+            await db.execute(
+                text("UPDATE challenge_photos SET user_id = NULL WHERE user_id = :uid"),
+                {"uid": user_id},
+            )
+        if gallery_photos:
+            await db.execute(
+                text("UPDATE gallery_photos SET user_id = NULL WHERE user_id = :uid"),
+                {"uid": user_id},
+            )
+
+    await db.delete(user)
+    await db.commit()
+    return None

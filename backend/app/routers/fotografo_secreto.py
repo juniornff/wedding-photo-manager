@@ -50,7 +50,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     if challenge_ids:
         result = await db.execute(
             select(ChallengePhoto, User)
-            .join(User, ChallengePhoto.user_id == User.id)
+            .outerjoin(User, ChallengePhoto.user_id == User.id)
             .where(ChallengePhoto.challenge_id.in_(challenge_ids))
             .order_by(ChallengePhoto.uploaded_at)
         )
@@ -64,9 +64,9 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                     message=cp.message,
                     challenge_id=cp.challenge_id,
                     user_id=cp.user_id,
-                    user_alias=user.alias,
-                    user_google_name=user.google_name,
-                    user_google_photo=user.google_photo,
+                    user_alias=user.alias if user else None,
+                    user_google_name=user.google_name if user else None,
+                    user_google_photo=user.google_photo if user else None,
                     uploaded_at=cp.uploaded_at,
                 )
             )

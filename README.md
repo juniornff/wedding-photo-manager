@@ -221,7 +221,7 @@ graph TB
         UC17[Elegir mesa ganadora]
         UC18[Quitar mesa ganadora]
         UC19[Moderar galería]
-        UC20[Gestionar usuarios: renombrar, asignar mesa]
+        UC20[Gestionar usuarios: renombrar, mesa, borrar]
     end
 
     INVITADO --> UC1
@@ -632,6 +632,7 @@ Miniaturas/
 | GET | `/api/admin/users` | Admin | Listar usuarios (alias, Google, mesa, fotos, fecha) |
 | PUT | `/api/admin/users/{id}` | Admin | Renombrar alias |
 | PATCH | `/api/admin/users/{id}/table` | Admin | Asignar/quitar mesa |
+| DELETE | `/api/admin/users/{id}?delete_photos=false` | Admin | Borrar usuario; `false` anonimiza sus fotos (galería+retos), `true` las elimina con sus archivos |
 
 ---
 
@@ -657,6 +658,7 @@ Miniaturas/
 - `Miniaturas/` replica exactamente la estructura de `Fotos/`
 - **Limpieza de archivos huérfanos** cada 10s (`ORPHAN_CLEANUP_INTERVAL`)
 - **SQLite con WAL mode** para concurrencia; sin backups automáticos
+- Al borrar un usuario, sus fotos pueden **quedar anónimas** (`user_id=NULL`, visibles como "Anónimo") o **eliminarse** con sus archivos (SSE incluido)
 
 ---
 

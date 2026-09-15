@@ -55,7 +55,7 @@ class GalleryPhotoResponse(BaseModel):
     path: str
     thumbnail_path: str
     message: Optional[str] = None
-    user_id: int
+    user_id: Optional[int] = None
     user_alias: Optional[str] = None
     user_google_name: Optional[str] = None
     user_google_photo: Optional[str] = None
@@ -121,7 +121,7 @@ class ChallengePhotoResponse(BaseModel):
     thumbnail_path: str
     message: Optional[str] = None
     challenge_id: int
-    user_id: int
+    user_id: Optional[int] = None
     user_alias: Optional[str] = None
     user_google_name: Optional[str] = None
     user_google_photo: Optional[str] = None

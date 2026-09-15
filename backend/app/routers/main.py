@@ -69,7 +69,7 @@ async def list_gallery(
 ):
     result = await db.execute(
         select(GalleryPhoto, User)
-        .join(User, GalleryPhoto.user_id == User.id)
+        .outerjoin(User, GalleryPhoto.user_id == User.id)
         .order_by(GalleryPhoto.uploaded_at.desc())
         .offset(offset)
         .limit(limit)
@@ -83,9 +83,9 @@ async def list_gallery(
             thumbnail_path=photo.thumbnail_path,
             message=photo.message,
             user_id=photo.user_id,
-            user_alias=user.alias,
-            user_google_name=user.google_name,
-            user_google_photo=user.google_photo,
+            user_alias=user.alias if user else None,
+            user_google_name=user.google_name if user else None,
+            user_google_photo=user.google_photo if user else None,
             uploaded_at=photo.uploaded_at,
         )
         for photo, user in rows

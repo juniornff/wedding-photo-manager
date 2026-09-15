@@ -640,6 +640,7 @@ function UsersTab() {
   const [tables, setTables] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [draftAlias, setDraftAlias] = useState('');
+  const [deleting, setDeleting] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -678,6 +679,19 @@ function UsersTab() {
       await api(`/api/admin/users/${user.id}/table`, {
         method: 'PATCH',
         body: JSON.stringify({ table_id: value === '' ? null : Number(value) }),
+      });
+      await load();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleDelete = async (deletePhotos) => {
+    const user = deleting;
+    setDeleting(null);
+    try {
+      await api(`/api/admin/users/${user.id}?delete_photos=${deletePhotos}`, {
+        method: 'DELETE',
       });
       await load();
     } catch (err) {
@@ -764,21 +778,61 @@ function UsersTab() {
                   </td>
                   <td className="py-2">
                     {editingId !== u.id && (
-                      <button
-                        onClick={() => {
-                          setEditingId(u.id);
-                          setDraftAlias(u.alias);
-                        }}
-                        className="text-xs px-2 py-1 bg-gray-100 rounded cursor-pointer"
-                      >
-                        Renombrar
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => {
+                            setEditingId(u.id);
+                            setDraftAlias(u.alias);
+                          }}
+                          className="text-xs px-2 py-1 bg-gray-100 rounded cursor-pointer"
+                        >
+                          Renombrar
+                        </button>
+                        <button
+                          onClick={() => setDeleting(u)}
+                          className="text-xs px-2 py-1 bg-red-100 text-red-600 rounded cursor-pointer"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {deleting && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
+            <h3 className="font-semibold text-lg mb-1">Eliminar usuario</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {deleting.google_name || deleting.alias || 'Anónimo'} —{' '}
+              {(deleting.gallery_count || 0) + (deleting.challenge_count || 0)} fotos
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => handleDelete(false)}
+                className="text-sm px-3 py-2 bg-gray-100 rounded cursor-pointer text-left"
+              >
+                Conservar sus fotos (quedarán anónimas)
+              </button>
+              <button
+                onClick={() => handleDelete(true)}
+                className="text-sm px-3 py-2 bg-red-600 text-white rounded cursor-pointer text-left"
+              >
+                Eliminar también sus fotos
+              </button>
+              <button
+                onClick={() => setDeleting(null)}
+                className="text-sm px-3 py-2 bg-gray-100 rounded cursor-pointer"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

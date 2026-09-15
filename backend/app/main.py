@@ -36,6 +36,61 @@ async def orphan_cleanup_loop():
             pass
 
 
+async def _column_notnull(name):
+    async with engine.connect() as conn:
+        rows = (await conn.execute(text(f"PRAGMA table_info({name})"))).all()
+    for row in rows:
+        if row[1] == "user_id":
+            return bool(row[3])
+    return True
+
+
+async def _ensure_nullable_user_id(db):
+    # SQLite no soporta ALTER COLUMN: se reconstruye la tabla para volver user_id nullable.
+    # Idempotente: se salta si la columna ya es nullable (PRAGMA table_info).
+    if await _column_notnull("gallery_photos"):
+        await db.execute(text("ALTER TABLE gallery_photos RENAME TO gallery_photos_old"))
+        await db.execute(text("""
+            CREATE TABLE gallery_photos (
+                id INTEGER NOT NULL PRIMARY KEY,
+                uuid VARCHAR(36) NOT NULL UNIQUE,
+                path VARCHAR(500) NOT NULL,
+                thumbnail_path VARCHAR(500) NOT NULL,
+                message VARCHAR(150),
+                user_id INTEGER,
+                uploaded_at DATETIME
+            )
+        """))
+        await db.execute(text("""
+            INSERT INTO gallery_photos (id, uuid, path, thumbnail_path, message, user_id, uploaded_at)
+            SELECT id, uuid, path, thumbnail_path, message, user_id, uploaded_at FROM gallery_photos_old
+        """))
+        await db.execute(text("DROP TABLE gallery_photos_old"))
+        await db.commit()
+
+    if await _column_notnull("challenge_photos"):
+        await db.execute(text("ALTER TABLE challenge_photos RENAME TO challenge_photos_old"))
+        await db.execute(text("""
+            CREATE TABLE challenge_photos (
+                id INTEGER NOT NULL PRIMARY KEY,
+                uuid VARCHAR(36) NOT NULL UNIQUE,
+                path VARCHAR(500) NOT NULL,
+                thumbnail_path VARCHAR(500) NOT NULL,
+                message VARCHAR(150),
+                challenge_id INTEGER NOT NULL,
+                user_id INTEGER,
+                uploaded_at DATETIME,
+                UNIQUE (challenge_id, user_id)
+            )
+        """))
+        await db.execute(text("""
+            INSERT INTO challenge_photos (id, uuid, path, thumbnail_path, message, challenge_id, user_id, uploaded_at)
+            SELECT id, uuid, path, thumbnail_path, message, challenge_id, user_id, uploaded_at FROM challenge_photos_old
+        """))
+        await db.execute(text("DROP TABLE challenge_photos_old"))
+        await db.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
@@ -59,6 +114,12 @@ async def lifespan(app: FastAPI):
             await db.commit()
         except Exception:
             pass
+
+    try:
+        async with SessionLocal() as db:
+            await _ensure_nullable_user_id(db)
+    except Exception:
+        logger.warning("Migración user_id nullable no completada", exc_info=True)
 
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     os.makedirs(settings.THUMBNAILS_DIR, exist_ok=True)

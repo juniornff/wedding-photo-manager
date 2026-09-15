@@ -60,7 +60,7 @@ class GalleryPhoto(Base):
     path = Column(String(500), nullable=False)
     thumbnail_path = Column(String(500), nullable=False)
     message = Column(String(150), nullable=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     uploaded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="gallery_photos")
@@ -104,7 +104,7 @@ class ChallengePhoto(Base):
     thumbnail_path = Column(String(500), nullable=False)
     message = Column(String(150), nullable=True)
     challenge_id = Column(Integer, ForeignKey("challenges.id"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     uploaded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     challenge = relationship("Challenge", back_populates="photos")
