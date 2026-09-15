@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, R
 from fastapi.responses import FileResponse
 from sqlalchemy import select, func, delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.models import (
@@ -31,6 +32,9 @@ from app.schemas.schemas import (
     ChallengePhotoResponse,
     CarouselReorderItem,
     TablePhotosResponse,
+    AdminUserResponse,
+    UserUpdate,
+    UserTableUpdate,
 )
 from app.services.photo_service import validate_file, save_photo, generate_thumbnail, delete_photo
 from app.services.sse_manager import sse_manager
@@ -608,3 +612,76 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         total_challenges=total_challenges,
         total_carousel=total_carousel,
     )
+
+
+def _user_query():
+    return (
+        select(User)
+        .options(
+            selectinload(User.table_rel),
+            selectinload(User.gallery_photos),
+            selectinload(User.challenge_photos),
+        )
+    )
+
+
+def _user_response(user: User) -> AdminUserResponse:
+    return AdminUserResponse(
+        id=user.id,
+        uuid=user.uuid,
+        alias=user.alias,
+        google_auth=bool(user.google_id),
+        google_name=user.google_name,
+        google_photo=user.google_photo,
+        table_id=user.table_id,
+        table_name=user.table_rel.name if user.table_rel else None,
+        created_at=user.created_at,
+        gallery_count=len(user.gallery_photos),
+        challenge_count=len(user.challenge_photos),
+    )
+
+
+async def _fetch_user(user_id: int, db: AsyncSession):
+    result = await db.execute(_user_query().where(User.id == user_id))
+    return result.scalar_one_or_none()
+
+
+async def _get_user_or_404(user_id: int, db: AsyncSession) -> User:
+    user = await _fetch_user(user_id, db)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+    return user
+
+
+async def _fresh_user_response(user_id: int, db: AsyncSession) -> AdminUserResponse:
+    user = await _fetch_user(user_id, db)
+    return _user_response(user)
+
+
+@admin_router.get("/users", response_model=list[AdminUserResponse])
+async def list_users(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(_user_query().order_by(User.created_at.desc()))
+    return [_user_response(u) for u in result.scalars().all()]
+
+
+@admin_router.put("/users/{user_id}", response_model=AdminUserResponse)
+async def update_user(user_id: int, payload: UserUpdate, db: AsyncSession = Depends(get_db)):
+    user = await _get_user_or_404(user_id, db)
+    if payload.alias is not None:
+        user.alias = payload.alias
+    await db.commit()
+    db.expire_all()
+    return await _fresh_user_response(user_id, db)
+
+
+@admin_router.patch("/users/{user_id}/table", response_model=AdminUserResponse)
+async def update_user_table(user_id: int, payload: UserTableUpdate, db: AsyncSession = Depends(get_db)):
+    user = await _get_user_or_404(user_id, db)
+    if payload.table_id is not None:
+        table = await db.get(Table, payload.table_id)
+        if not table:
+            raise HTTPException(status_code=404, detail="Mesa no encontrada.")
+    user.table_id = payload.table_id
+    await db.commit()
+    db.expire_all()
+    return await _fresh_user_response(user_id, db)

@@ -28,6 +28,7 @@ Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. 
 
 ## Backend layout & quirks
 - Routers under `app/routers/`: `main`, `auth`, `fotografo_secreto`, `admin`, `sse` — all mounted in `app/main.py`
+- Admin user management endpoints (all `require_admin`): `GET /api/admin/users` (list w/ goal counts + table name), `PUT /api/admin/users/{id}` (rename alias), `PATCH /api/admin/users/{id}/table` (assign/clear `table_id`). After mutation they do `db.expire_all()` + fresh re-fetch because the ORM identity map otherwise returns the stale `table_rel` relationship
 - Models live in a single `app/models/models.py`; schemas in `app/schemas/schemas.py`; services in `app/services/` (`photo_service`, `auth_service`, `sse_manager`)
 - **No Alembic.** Schema = `Base.metadata.create_all` at startup, plus hand-written `ALTER TABLE` statements in the `main.py` lifespan (`challenges.locked`, `wedding_info.carousel_interval`). `create_all` never alters existing tables; adding a column to an existing DB must follow the same try/except `ALTER TABLE` pattern (SQLite has no `ADD COLUMN IF NOT EXISTS`)
 - Uploaded files served as static mounts: `/api/uploads` → `Fotos/`, `/api/thumbnails` → `Miniaturas/`
@@ -63,7 +64,7 @@ The backend broadcasts these named events via `sse_manager.broadcast()`:
 | `/` | MainPage (info boda, carrusel, galería, botón subida) |
 | `/fotografo-secreto` | SecretDashboardPage (tablero público en vivo de mesas/retos/fotos, ganador con animación) |
 | `/fotografo-secreto/:qr_code` | FotografoSecretoPage (mesa + retos, foto propia por reto) |
-| `/admin` | AdminPage (panel de control con tabs: Info, Carrusel, Galería, Mesas, Retos, Fotos Retos, Ganador) |
+| `/admin` | AdminPage (panel de control con tabs: Dashboard, Info Boda, Carrusel, Mesas, Retos, Galería, Usuarios, Ganador) |
 
 ## Key business rules
 - No login for guests — name/alias stored in localStorage + DB; anonymous UUID per device

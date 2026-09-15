@@ -221,6 +221,7 @@ graph TB
         UC17[Elegir mesa ganadora]
         UC18[Quitar mesa ganadora]
         UC19[Moderar galería]
+        UC20[Gestionar usuarios: renombrar, asignar mesa]
     end
 
     INVITADO --> UC1
@@ -244,6 +245,7 @@ graph TB
     NOVIOS --> UC17
     NOVIOS --> UC18
     NOVIOS --> UC19
+    NOVIOS --> UC20
 
     GOOGLE -->|Recupera identidad| UC3
     GOOGLE -->|Recupera identidad| UC8
@@ -543,7 +545,8 @@ graph TB
         TAB_CARRUSEL[Carrusel]
         TAB_TABLES[Mesas + modal QR]
         TAB_RETOS[Retos]
-        TAB_GALERIA[Galeria]
+        TAB_GALERIA[Galería]
+        TAB_USERS[Usuarios]
         TAB_WINNER[Ganador]
         CHAL_MODAL[ChallengePhotosModal]
     end
@@ -570,6 +573,7 @@ graph TB
     ADMIN_PAGE --> TAB_TABLES
     ADMIN_PAGE --> TAB_RETOS
     ADMIN_PAGE --> TAB_GALERIA
+    ADMIN_PAGE --> TAB_USERS
     ADMIN_PAGE --> TAB_WINNER
 
     TAB_RETOS --> CHAL_MODAL
@@ -625,6 +629,9 @@ Miniaturas/
 | POST/DELETE | `/api/admin/select-winner` | Admin | Elegir/quitar ganador |
 | GET/POST/DELETE | `/api/admin/carousel`, `/gallery` | Admin | Gestión carrusel/galería |
 | PUT | `/api/admin/wedding-info` | Admin | Editar info boda/colores |
+| GET | `/api/admin/users` | Admin | Listar usuarios (alias, Google, mesa, fotos, fecha) |
+| PUT | `/api/admin/users/{id}` | Admin | Renombrar alias |
+| PATCH | `/api/admin/users/{id}/table` | Admin | Asignar/quitar mesa |
 
 ---
 

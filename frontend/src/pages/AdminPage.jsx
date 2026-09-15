@@ -635,6 +635,156 @@ function GalleryTab() {
   );
 }
 
+function UsersTab() {
+  const [users, setUsers] = useState([]);
+  const [tables, setTables] = useState([]);
+  const [editingId, setEditingId] = useState(null);
+  const [draftAlias, setDraftAlias] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      const [u, t] = await Promise.all([api('/api/admin/users'), api('/api/admin/tables')]);
+      setUsers(u);
+      setTables(t);
+    } catch (err) {
+      alert(err.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleRename = async (user) => {
+    const alias = draftAlias.trim();
+    if (!alias || alias === user.alias) {
+      setEditingId(null);
+      return;
+    }
+    try {
+      await api(`/api/admin/users/${user.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ alias }),
+      });
+      await load();
+      setEditingId(null);
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleTableChange = async (user, value) => {
+    try {
+      await api(`/api/admin/users/${user.id}/table`, {
+        method: 'PATCH',
+        body: JSON.stringify({ table_id: value === '' ? null : Number(value) }),
+      });
+      await load();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  return (
+    <div>
+      <p className="text-sm text-gray-500 mb-3">{users.length} usuarios registrados</p>
+      {users.length === 0 ? (
+        <p className="text-gray-400">Sin usuarios registrados.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-gray-400 border-b border-gray-200">
+                <th className="py-2 pr-3">Usuario</th>
+                <th className="py-2 pr-3">Mesa</th>
+                <th className="py-2 pr-3">Fotos</th>
+                <th className="py-2 pr-3">Fecha</th>
+                <th className="py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id} className="border-b border-gray-100">
+                  <td className="py-2 pr-3">
+                    {editingId === u.id ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          value={draftAlias}
+                          onChange={(e) => setDraftAlias(e.target.value)}
+                          className="border rounded px-2 py-1 text-sm w-40"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => handleRename(u)}
+                          className="text-xs px-2 py-1 bg-[var(--color-primary)] text-white rounded cursor-pointer"
+                        >
+                          Guardar
+                        </button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className="text-xs px-2 py-1 bg-gray-100 rounded cursor-pointer"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        {u.google_photo && (
+                          <img src={u.google_photo} alt="" className="w-6 h-6 rounded-full" />
+                        )}
+                        <div>
+                          <p className="font-medium">{u.google_name || u.alias}</p>
+                          <p className="text-xs text-gray-400">
+                            {u.alias}
+                            {u.google_auth && <span className="ml-1 text-blue-500">• Google</span>}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </td>
+                  <td className="py-2 pr-3">
+                    <select
+                      value={u.table_id ?? ''}
+                      onChange={(e) => handleTableChange(u, e.target.value)}
+                      className="border rounded px-2 py-1 text-sm bg-white"
+                    >
+                      <option value="">Sin mesa</option>
+                      {tables.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name || `Mesa ${t.number}`}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="py-2 pr-3 text-gray-500">
+                    {(u.gallery_count || 0) + (u.challenge_count || 0)}
+                  </td>
+                  <td className="py-2 pr-3 text-gray-400 text-xs">
+                    {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
+                  </td>
+                  <td className="py-2">
+                    {editingId !== u.id && (
+                      <button
+                        onClick={() => {
+                          setEditingId(u.id);
+                          setDraftAlias(u.alias);
+                        }}
+                        className="text-xs px-2 py-1 bg-gray-100 rounded cursor-pointer"
+                      >
+                        Renombrar
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WinnerTab() {
   const [tables, setTables] = useState([]);
   const [selectedTable, setSelectedTable] = useState(null);
@@ -843,6 +993,7 @@ export default function AdminPage() {
     { key: 'tables', label: 'Mesas' },
     { key: 'challenges', label: 'Retos' },
     { key: 'gallery', label: 'Galería' },
+    { key: 'users', label: 'Usuarios' },
     { key: 'winner', label: 'Ganador' },
   ];
 
@@ -865,6 +1016,7 @@ export default function AdminPage() {
         {tab === 'tables' && <TablesTab />}
         {tab === 'challenges' && <ChallengesTab />}
         {tab === 'gallery' && <GalleryTab />}
+        {tab === 'users' && <UsersTab />}
         {tab === 'winner' && <WinnerTab />}
       </div>
     </div>

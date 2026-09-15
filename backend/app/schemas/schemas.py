@@ -220,3 +220,27 @@ class PhotographerDashboardResponse(BaseModel):
     winner_table_id: Optional[int] = None
     winner_table_name: Optional[str] = None
     tables: list[DashboardTableResponse] = []
+
+
+class AdminUserResponse(BaseModel):
+    id: int
+    uuid: str
+    alias: str
+    google_auth: bool = False
+    google_name: Optional[str] = None
+    google_photo: Optional[str] = None
+    table_id: Optional[int] = None
+    table_name: Optional[str] = None
+    created_at: Optional[datetime] = None
+    gallery_count: int = 0
+    challenge_count: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class UserUpdate(BaseModel):
+    alias: Optional[str] = Field(None, min_length=1, max_length=100)
+
+
+class UserTableUpdate(BaseModel):
+    table_id: Optional[int] = None
