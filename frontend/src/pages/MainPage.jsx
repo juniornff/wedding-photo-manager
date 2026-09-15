@@ -64,21 +64,26 @@ export default function MainPage() {
   return (
     <div className="min-h-screen">
       {info && (
-        <section className="relative overflow-hidden w-full h-[54vh] lg:h-[62vh]">
+        <section className="relative overflow-hidden w-full h-[54vh] lg:h-[80vh]">
           {carousel.length > 0 && (
             <div className="absolute inset-0">
               {carousel.map((photo, idx) => (
-                <div
-                  key={photo.id}
-                  className="absolute inset-0 transition-opacity duration-1000"
-                  style={{ opacity: idx === carouselIdx ? 1 : 0 }}
-                >
-                  <img
-                    src={photoUrl(photo)}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                </div>
+<div
+                    key={photo.id}
+                    className="absolute inset-0 transition-opacity duration-1000"
+                    style={{ opacity: idx === carouselIdx ? 1 : 0 }}
+                  >
+                    <img
+                      src={photoUrl(photo)}
+                      alt=""
+                      className="absolute inset-0 w-full h-full object-cover blur-2xl brightness-75 scale-125"
+                    />
+                    <img
+                      src={photoUrl(photo)}
+                      alt=""
+                      className="relative w-full h-full object-contain"
+                    />
+                  </div>
               ))}
             </div>
           )}
