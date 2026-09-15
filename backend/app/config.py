@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     THUMBNAILS_DIR: str = "Miniaturas"
     ADMIN_EMAIL: str = ""
     ADMIN_PASSWORD: str = ""
+    NOVIO_EMAIL: str = ""
+    NOVIA_EMAIL: str = ""
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     SECRET_KEY: str = ""
@@ -29,3 +31,13 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def get_admin_emails() -> set[str]:
+    return {e for e in (settings.ADMIN_EMAIL, settings.NOVIO_EMAIL, settings.NOVIA_EMAIL) if e}
+
+
+def is_admin_email(email: str) -> bool:
+    if not email:
+        return False
+    return email in get_admin_emails()

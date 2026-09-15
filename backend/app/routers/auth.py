@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models.models import User, Admin
 from app.schemas.schemas import GuestCreate, UserResponse, AdminLogin
 from app.services.auth_service import create_guest, verify_password, hash_password
-from app.config import settings
+from app.config import settings, get_admin_emails, is_admin_email
 
 auth_router = APIRouter(prefix="/api", tags=["auth"])
 
@@ -63,13 +63,13 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
     name = userinfo.get("name")
     picture = userinfo.get("picture")
 
-    if email and email == settings.ADMIN_EMAIL:
+    if email and is_admin_email(email):
         request.session["admin_email"] = email
-        for admin_email_setting in [settings.ADMIN_EMAIL]:
+        for admin_email_setting in get_admin_emails():
             result = await db.execute(select(Admin).where(Admin.email == admin_email_setting))
             admin = result.scalar_one_or_none()
             if not admin:
-                new_admin = Admin(email=email, password_hash=hash_password(str(uuid.uuid4())))
+                new_admin = Admin(email=admin_email_setting, password_hash=hash_password(settings.ADMIN_PASSWORD))
                 db.add(new_admin)
                 await db.commit()
         return RedirectResponse(url=f"{settings.FRONTEND_URL}/admin")

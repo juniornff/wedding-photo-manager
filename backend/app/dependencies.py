@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.models import User
-from app.config import settings
+from app.config import is_admin_email
 
 
 async def get_current_user(
@@ -27,6 +27,6 @@ async def get_current_user(
 
 async def require_admin(request: Request) -> str:
     email = request.session.get("admin_email")
-    if email != settings.ADMIN_EMAIL:
+    if not is_admin_email(email):
         raise HTTPException(status_code=401, detail="No autorizado.")
     return email

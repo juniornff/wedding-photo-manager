@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import User, Admin
-from app.config import settings
+from app.config import settings, get_admin_emails
 
 
 def hash_password(password: str) -> str:
@@ -26,16 +26,17 @@ async def create_guest(db: AsyncSession, alias: str) -> User:
 
 
 async def init_admin(db: AsyncSession) -> None:
-    if not settings.ADMIN_EMAIL or not settings.ADMIN_PASSWORD:
+    if not settings.ADMIN_PASSWORD:
         return
-    result = await db.execute(select(Admin).where(Admin.email == settings.ADMIN_EMAIL))
-    if result.scalar_one_or_none() is None:
-        admin = Admin(
-            email=settings.ADMIN_EMAIL,
-            password_hash=hash_password(settings.ADMIN_PASSWORD),
-        )
-        db.add(admin)
-        await db.commit()
+    for email in get_admin_emails():
+        result = await db.execute(select(Admin).where(Admin.email == email))
+        if result.scalar_one_or_none() is None:
+            admin = Admin(
+                email=email,
+                password_hash=hash_password(settings.ADMIN_PASSWORD),
+            )
+            db.add(admin)
+            await db.commit()
 
 
 async def init_wedding_info(db: AsyncSession) -> None:

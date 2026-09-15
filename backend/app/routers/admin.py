@@ -39,7 +39,7 @@ from app.schemas.schemas import (
 from app.services.photo_service import validate_file, save_photo, generate_thumbnail, delete_photo
 from app.services.sse_manager import sse_manager
 from app.dependencies import require_admin
-from app.config import settings
+from app.config import settings, is_admin_email
 
 admin_router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -47,7 +47,7 @@ admin_router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depe
 @admin_router.get("/me")
 async def admin_me(request: Request, db: AsyncSession = Depends(get_db)):
     email = request.session.get("admin_email")
-    if email != settings.ADMIN_EMAIL:
+    if not is_admin_email(email):
         raise HTTPException(status_code=401, detail="No autorizado.")
 
     google_id_tag = f"admin:{email}"

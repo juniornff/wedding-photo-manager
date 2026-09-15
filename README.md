@@ -675,12 +675,12 @@ Las variables de entorno reales tienen prioridad sobre los dotenv; `extra="ignor
 
 | Variable | Uso |
 |---|---|
-| `ADMIN_EMAIL` | Email del admin (OAuth + login inicial) |
-| `ADMIN_PASSWORD` | Password del admin inicial |
+| `ADMIN_EMAIL` | Email del admin inicial (OAuth + login por contraseña) |
+| `ADMIN_PASSWORD` | Password del admin (compartida por los emails admin) |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
 | `SECRET_KEY` | Clave para session cookies |
-| `NOVIO_EMAIL` / `NOVIA_EMAIL` | Presentes en el `.env`, el código actual no las lee |
+| `NOVIO_EMAIL` / `NOVIA_EMAIL` | Emails admin extra (OAuth): `is_admin_email()` acepta `ADMIN_EMAIL`, `NOVIO_EMAIL` y `NOVIA_EMAIL` |
 
 Opcionales (defaults en `Settings`): `ORPHAN_CLEANUP_INTERVAL=10`, `FRONTEND_URL=http://localhost:5173`, `CORS_ALLOWED_ORIGINS=` (CSV de orígenes extra para CORS, p.ej. `http://10.0.0.4:5173` en LAN), `MAX_UPLOAD_SIZE=25`, `RATE_LIMIT_PER_MINUTE=15`, `HOST=0.0.0.0`, `PORT=8000`, `DATABASE_URL`, `UPLOAD_DIR=Fotos`, `THUMBNAILS_DIR=Miniaturas`.
 

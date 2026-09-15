@@ -85,7 +85,7 @@ The backend broadcasts these named events via `sse_manager.broadcast()`:
 - Fotos servidas via FastAPI (sin autenticación para visualizar)
 - Descarga individual y por lote (seleccionando fotos)
 - Mensaje opcional (150 caracteres) al subir foto (galería y fotos de retos)
-- Admin auth: Google OAuth + session cookies + verificación de emails desde .env
+- Admin auth: Google OAuth + session cookies + verificación de emails desde .env — `is_admin_email()` (config.py) acepta `ADMIN_EMAIL`, `NOVIO_EMAIL` y `NOVIA_EMAIL`; `init_admin`/callback crean filas `Admin` para los tres con hash de `ADMIN_PASSWORD`
 - Admin inicial creado desde .env (email + password)
 - Miniaturas/ replica estructura de Fotos/
 - Limpieza de archivos huérfanos cada 10s (configurable via `.env`)
