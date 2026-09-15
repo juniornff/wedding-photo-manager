@@ -91,12 +91,38 @@ async def _ensure_nullable_user_id(db):
         await db.commit()
 
 
+async def _ensure_user_roles(db):
+    # SQLite no tiene ADD COLUMN IF NOT EXISTS: patrón try/except idempotente.
+    for ddl in (
+        "ALTER TABLE users ADD COLUMN email VARCHAR(200)",
+        "ALTER TABLE users ADD COLUMN password_hash VARCHAR(200)",
+        "ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'guest'",
+    ):
+        try:
+            await db.execute(text(ddl))
+            await db.commit()
+        except Exception:
+            pass
+    try:
+        await db.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email ON users (email)"))
+        await db.commit()
+    except Exception:
+        pass
+    # Limpiar placeholders de la antigua arquitectura (google_id "admin:email").
+    try:
+        await db.execute(text("DELETE FROM users WHERE google_id LIKE 'admin:%'"))
+        await db.commit()
+    except Exception:
+        pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
     async with SessionLocal() as db:
+        await _ensure_user_roles(db)
         await init_admin(db)
         await init_wedding_info(db)
         try:

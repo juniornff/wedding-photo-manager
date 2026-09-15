@@ -9,7 +9,9 @@ class Settings(BaseSettings):
     ADMIN_EMAIL: str = ""
     ADMIN_PASSWORD: str = ""
     NOVIO_EMAIL: str = ""
+    NOVIO_PASSWORD: str = ""
     NOVIA_EMAIL: str = ""
+    NOVIA_PASSWORD: str = ""
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     SECRET_KEY: str = ""
@@ -35,6 +37,14 @@ settings = Settings()
 
 def get_admin_emails() -> set[str]:
     return {e for e in (settings.ADMIN_EMAIL, settings.NOVIO_EMAIL, settings.NOVIA_EMAIL) if e}
+
+
+def get_admin_password(email: str) -> str:
+    if email == settings.NOVIO_EMAIL and settings.NOVIO_PASSWORD:
+        return settings.NOVIO_PASSWORD
+    if email == settings.NOVIA_EMAIL and settings.NOVIA_PASSWORD:
+        return settings.NOVIA_PASSWORD
+    return settings.ADMIN_PASSWORD
 
 
 def is_admin_email(email: str) -> bool:

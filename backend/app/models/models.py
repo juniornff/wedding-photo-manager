@@ -13,6 +13,9 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     uuid = Column(String(36), unique=True, nullable=False)
     alias = Column(String(100), nullable=False)
+    email = Column(String(200), unique=True, nullable=True)
+    password_hash = Column(String(200), nullable=True)
+    role = Column(String(20), nullable=False, default="guest")
     google_id = Column(String(100), unique=True, nullable=True)
     google_name = Column(String(200), nullable=True)
     google_photo = Column(String(500), nullable=True)
@@ -109,12 +112,3 @@ class ChallengePhoto(Base):
 
     challenge = relationship("Challenge", back_populates="photos")
     user = relationship("User", back_populates="challenge_photos")
-
-
-class Admin(Base):
-    __tablename__ = "admins"
-
-    id = Column(Integer, primary_key=True)
-    email = Column(String(200), unique=True, nullable=False)
-    password_hash = Column(String(200), nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

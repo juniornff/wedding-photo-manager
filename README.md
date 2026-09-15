@@ -107,6 +107,9 @@ erDiagram
         string google_id UK
         string google_name
         string google_photo
+        string email UK
+        string password_hash
+        string role
         int table_id FK
         datetime created_at
     }
@@ -166,13 +169,6 @@ erDiagram
         int challenge_id FK
         int user_id FK
         datetime uploaded_at
-    }
-
-    Admin {
-        int id PK
-        string email UK
-        string password_hash
-        datetime created_at
     }
 
     User ||--o{ GalleryPhoto : "sube"
@@ -467,8 +463,9 @@ classDiagram
     }
 
     class AuthService {
-        +verify_admin_emails()
-        +password_hashing()
+        +create_guest()
+        +verify_password()
+        +init_admin()
     }
 
     class SSEManager {
@@ -655,7 +652,7 @@ Miniaturas/
 - Cada participante ve **solo su propia foto** por reto; los espectadores ven **todas** en el dashboard público
 - Dashboard público **en vivo sin login** (EventSource propio); confetti + resaltado al elegir ganador
 - Admin puede **seleccionar y deseleccionar** el ganador; se notifica por SSE
-- **Admin**: Google OAuth + session cookies + verificación contra emails en `.env`; **admin inicial** desde `.env`
+- **Admin**: los administradores son `User` con `role='admin'` (sin modelo `Admin`): al arranque se hace upsert de `ADMIN_EMAIL`, `NOVIO_EMAIL` y `NOVIA_EMAIL` desde `.env`, cada uno con su password (`ADMIN_PASSWORD`/`NOVIO_PASSWORD`/`NOVIA_PASSWORD`). Login por password (`POST /api/auth/admin`) o Google OAuth; un Google login con correo admin **fusiona** automáticamente la identidad previa de invitado (fotos + mesa) en la cuenta admin
 - `Miniaturas/` replica exactamente la estructura de `Fotos/`
 - **Limpieza de archivos huérfanos** cada 10s (`ORPHAN_CLEANUP_INTERVAL`)
 - **SQLite con WAL mode** para concurrencia; sin backups automáticos
@@ -676,11 +673,14 @@ Las variables de entorno reales tienen prioridad sobre los dotenv; `extra="ignor
 | Variable | Uso |
 |---|---|
 | `ADMIN_EMAIL` | Email del admin inicial (OAuth + login por contraseña) |
-| `ADMIN_PASSWORD` | Password del admin (compartida por los emails admin) |
+| `ADMIN_PASSWORD` | Password del admin principal |
+| `NOVIO_EMAIL` / `NOVIO_PASSWORD` | Email+password del segundo admin (el novio) |
+| `NOVIA_EMAIL` / `NOVIA_PASSWORD` | Email+password del tercer admin (la novia) |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
 | `SECRET_KEY` | Clave para session cookies |
-| `NOVIO_EMAIL` / `NOVIA_EMAIL` | Emails admin extra (OAuth): `is_admin_email()` acepta `ADMIN_EMAIL`, `NOVIO_EMAIL` y `NOVIA_EMAIL` |
+
+`is_admin_email()` acepta `ADMIN_EMAIL`, `NOVIO_EMAIL` y `NOVIA_EMAIL`; `get_admin_password(email)` devuelve la password de cada uno (fallback a `ADMIN_PASSWORD`).
 
 Opcionales (defaults en `Settings`): `ORPHAN_CLEANUP_INTERVAL=10`, `FRONTEND_URL=http://localhost:5173`, `CORS_ALLOWED_ORIGINS=` (CSV de orígenes extra para CORS, p.ej. `http://10.0.0.4:5173` en LAN), `MAX_UPLOAD_SIZE=25`, `RATE_LIMIT_PER_MINUTE=15`, `HOST=0.0.0.0`, `PORT=8000`, `DATABASE_URL`, `UPLOAD_DIR=Fotos`, `THUMBNAILS_DIR=Miniaturas`.
 

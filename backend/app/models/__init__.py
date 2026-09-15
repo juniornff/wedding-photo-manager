@@ -7,5 +7,4 @@ from app.models.models import (
     Table,
     Challenge,
     ChallengePhoto,
-    Admin,
 )

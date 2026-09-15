@@ -4,8 +4,8 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.models import User, Admin
-from app.config import settings, get_admin_emails
+from app.models.models import User
+from app.config import settings, get_admin_emails, get_admin_password
 
 
 def hash_password(password: str) -> str:
@@ -18,7 +18,7 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 async def create_guest(db: AsyncSession, alias: str) -> User:
     user_uuid = str(uuid.uuid4())
-    user = User(uuid=user_uuid, alias=alias)
+    user = User(uuid=user_uuid, alias=alias, role="guest")
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -26,17 +26,25 @@ async def create_guest(db: AsyncSession, alias: str) -> User:
 
 
 async def init_admin(db: AsyncSession) -> None:
-    if not settings.ADMIN_PASSWORD:
-        return
     for email in get_admin_emails():
-        result = await db.execute(select(Admin).where(Admin.email == email))
-        if result.scalar_one_or_none() is None:
-            admin = Admin(
-                email=email,
-                password_hash=hash_password(settings.ADMIN_PASSWORD),
-            )
-            db.add(admin)
-            await db.commit()
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+        if user:
+            if user.role != "admin":
+                user.role = "admin"
+                db.add(user)
+            continue
+        password = get_admin_password(email)
+        if not password:
+            continue
+        db.add(User(
+            uuid=str(uuid.uuid4()),
+            alias="Admin",
+            email=email,
+            password_hash=hash_password(password),
+            role="admin",
+        ))
+    await db.commit()
 
 
 async def init_wedding_info(db: AsyncSession) -> None:

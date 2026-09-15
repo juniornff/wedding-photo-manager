@@ -37,7 +37,15 @@ export function AuthProvider({ children }) {
             localStorage.setItem('wedding_uuid', data.uuid);
             localStorage.setItem('wedding_user_id', data.user_id);
             localStorage.setItem('wedding_alias', data.alias);
-            setUser({ id: data.user_id, uuid: data.uuid, alias: data.alias });
+            if (data.role) localStorage.setItem('wedding_role', data.role);
+            setUser({
+              id: data.user_id,
+              uuid: data.uuid,
+              alias: data.alias,
+              role: data.role,
+              google_name: data.google_name,
+              google_photo: data.google_photo,
+            });
             setLoading(false);
             return;
           }
@@ -63,10 +71,12 @@ export function AuthProvider({ children }) {
     if (storedId) {
       try {
         const data = await api(`/api/guest/me?user_id=${storedId}`);
+        if (data.role) localStorage.setItem('wedding_role', data.role);
         setUser(data);
       } catch {
         const alias = localStorage.getItem('wedding_alias');
         setUser({ id: parseInt(storedId), uuid, alias,
+          role: localStorage.getItem('wedding_role'),
           google_name: localStorage.getItem('wedding_google_name'),
           google_photo: localStorage.getItem('wedding_google_photo'),
         });
@@ -90,6 +100,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem('wedding_uuid', data.uuid);
     localStorage.setItem('wedding_user_id', data.id);
     localStorage.setItem('wedding_alias', alias);
+    if (data.role) localStorage.setItem('wedding_role', data.role);
     if (data.google_name) localStorage.setItem('wedding_google_name', data.google_name);
     if (data.google_photo) localStorage.setItem('wedding_google_photo', data.google_photo);
     setUser(data);
@@ -104,6 +115,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('wedding_google_name');
     localStorage.removeItem('wedding_google_photo');
     localStorage.removeItem('wedding_is_admin');
+    localStorage.removeItem('wedding_role');
     setUser(null);
     setIsAdmin(false);
   };

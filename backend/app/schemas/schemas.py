@@ -11,6 +11,7 @@ class UserResponse(BaseModel):
     id: int
     uuid: str
     alias: str
+    role: str = "guest"
     google_name: Optional[str] = None
     google_photo: Optional[str] = None
     table_id: Optional[int] = None
@@ -232,6 +233,7 @@ class AdminUserResponse(BaseModel):
     id: int
     uuid: str
     alias: str
+    role: str = "guest"
     google_auth: bool = False
     google_name: Optional[str] = None
     google_photo: Optional[str] = None

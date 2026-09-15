@@ -17,7 +17,6 @@ from app.models.models import (
     Challenge,
     ChallengePhoto,
     User,
-    Admin,
 )
 from app.schemas.schemas import (
     WeddingInfoResponse,
@@ -50,19 +49,25 @@ async def admin_me(request: Request, db: AsyncSession = Depends(get_db)):
     if not is_admin_email(email):
         raise HTTPException(status_code=401, detail="No autorizado.")
 
-    google_id_tag = f"admin:{email}"
-    result = await db.execute(select(User).where(User.google_id == google_id_tag))
-    user = result.scalar_one_or_none()
-
+    user = None
+    user_id = request.session.get("user_id")
+    if user_id is not None:
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+    if not user:
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
     if not user:
         user = User(
             uuid=str(uuid.uuid4()),
             alias="Admin",
-            google_id=google_id_tag,
+            email=email,
+            role="admin",
         )
         db.add(user)
         await db.commit()
         await db.refresh(user)
+        request.session["user_id"] = user.id
 
     return {
         "email": email,
@@ -70,6 +75,9 @@ async def admin_me(request: Request, db: AsyncSession = Depends(get_db)):
         "user_id": user.id,
         "uuid": user.uuid,
         "alias": user.alias,
+        "role": user.role,
+        "google_name": user.google_name,
+        "google_photo": user.google_photo,
     }
 
 
@@ -630,6 +638,7 @@ def _user_response(user: User) -> AdminUserResponse:
         id=user.id,
         uuid=user.uuid,
         alias=user.alias,
+        role=user.role,
         google_auth=bool(user.google_id),
         google_name=user.google_name,
         google_photo=user.google_photo,
@@ -693,7 +702,7 @@ async def delete_user(user_id: int, delete_photos: bool = False, db: AsyncSessio
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
 
-    if user.google_id and user.google_id.startswith("admin:"):
+    if user.role == "admin":
         raise HTTPException(status_code=400, detail="No se puede eliminar la cuenta del administrador.")
 
     result = await db.execute(select(ChallengePhoto).where(ChallengePhoto.user_id == user_id))

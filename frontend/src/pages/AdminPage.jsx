@@ -747,7 +747,14 @@ function UsersTab() {
                           <img src={u.google_photo} alt="" className="w-6 h-6 rounded-full" />
                         )}
                         <div>
-                          <p className="font-medium">{u.google_name || u.alias}</p>
+                          <p className="font-medium">
+                            {u.google_name || u.alias}
+                            {u.role === 'admin' && (
+                              <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium align-middle">
+                                Admin
+                              </span>
+                            )}
+                          </p>
                           <p className="text-xs text-gray-400">
                             {u.alias}
                             {u.google_auth && <span className="ml-1 text-blue-500">• Google</span>}

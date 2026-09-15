@@ -31,7 +31,7 @@ Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. 
 
 ## Backend layout & quirks
 - Routers under `app/routers/`: `main`, `auth`, `fotografo_secreto`, `admin`, `sse` — all mounted in `app/main.py`
-- Admin user management endpoints (all `require_admin`): `GET /api/admin/users` (list w/ goal counts + table name), `PUT /api/admin/users/{id}` (rename alias), `PATCH /api/admin/users/{id}/table` (assign/clear `table_id`), `DELETE /api/admin/users/{id}?delete_photos=false` (borrar; `false`=anonimizar fotos vía `SET user_id=NULL`, `true`=borrar fotos+archivos+SSE). After mutation they do `db.expire_all()` + fresh re-fetch because the ORM identity map otherwise returns the stale `table_rel` relationship. Borrado bloquea cuentas admin (`google_id` tag `admin:`) con 400
+- Admin user management endpoints (all `require_admin`): `GET /api/admin/users` (list w/ goal counts + table name), `PUT /api/admin/users/{id}` (rename alias), `PATCH /api/admin/users/{id}/table` (assign/clear `table_id`), `DELETE /api/admin/users/{id}?delete_photos=false` (borrar; `false`=anonimizar fotos vía `SET user_id=NULL`, `true`=borrar fotos+archivos+SSE). After mutation they do `db.expire_all()` + fresh re-fetch because the ORM identity map otherwise returns the stale `table_rel` relationship. Borrado bloquea cuentas con `role='admin'` con 400
 - Models live in a single `app/models/models.py`; schemas in `app/schemas/schemas.py`; services in `app/services/` (`photo_service`, `auth_service`, `sse_manager`)
 - **No Alembic.** Schema = `Base.metadata.create_all` at startup, plus hand-written `ALTER TABLE` statements in the `main.py` lifespan (`challenges.locked`, `wedding_info.carousel_interval`). `create_all` never alters existing tables; adding a column to an existing DB must follow the same try/except `ALTER TABLE` pattern (SQLite has no `ADD COLUMN IF NOT EXISTS`)
 - **`user_id` nullable para fotos anónimas.** En BD nuevas `GalleryPhoto.user_id`/`ChallengePhoto.user_id` ya son `nullable=True`. En BD existentes, la migración `_ensure_nullable_user_id()` reconstruye ambas tablas (RENAME→CREATE→INSERT→DROP) de forma idempotente (`PRAGMA table_info`), preservando `UNIQUE (challenge_id, user_id)`; todas las lecturas de fotos usan OUTER JOIN a User y serializan `user_alias=None` cuando el autor fue borrado (`=> "Anónimo"` en la UI)
@@ -85,8 +85,8 @@ The backend broadcasts these named events via `sse_manager.broadcast()`:
 - Fotos servidas via FastAPI (sin autenticación para visualizar)
 - Descarga individual y por lote (seleccionando fotos)
 - Mensaje opcional (150 caracteres) al subir foto (galería y fotos de retos)
-- Admin auth: Google OAuth + session cookies + verificación de emails desde .env — `is_admin_email()` (config.py) acepta `ADMIN_EMAIL`, `NOVIO_EMAIL` y `NOVIA_EMAIL`; `init_admin`/callback crean filas `Admin` para los tres con hash de `ADMIN_PASSWORD`
-- Admin inicial creado desde .env (email + password)
+- **Roles de usuario (`User.role` admin|guest):** no hay modelo `Admin`. Al arranque `init_admin` hace upsert de los usuarios `ADMIN_EMAIL`, `NOVIO_EMAIL`, `NOVIA_EMAIL` del `.env` con `role='admin'` (email+password_hash en la tabla `users`, unique index `ix_users_email`; password solo al crear, vía `get_admin_password(email)` → `ADMIN_PASSWORD`/`NOVIO_PASSWORD`/`NOVIA_PASSWORD`). El resto de usuarios nacen `role='guest'`
+- Admin auth: password (`POST /api/auth/admin`) o Google OAuth + session cookies; `is_admin_email()` acepta `ADMIN_EMAIL`, `NOVIO_EMAIL`, `NOVIA_EMAIL`. Si un Google login usa un correo que ya existe como invitado, `_resolve_admin_user` **fusiona** al invitado en la cuenta admin (mueve `gallery_photos`/`challenge_photos`, copia `table_id` si falta, borra la fila invitado). No se crean filas placeholder `admin:{email}`; la migración del lifespan borra las que queden
 - Miniaturas/ replica estructura de Fotos/
 - Limpieza de archivos huérfanos cada 10s (configurable via `.env`)
 - SQLite con WAL mode para concurrencia
@@ -110,7 +110,7 @@ Contextos divididos en 3 archivos cada uno (patrón canónico fast-refresh; lint
 - `context/SSEContext.js` (`createContext`) + `context/SSEProvider.jsx` (`SSEProvider` component) + `context/useSSE.jsx` (`useSSE` hook)
 
 ## Database entities
-Canonical ER diagram in `README.md`. Summary: **User** (anonymous uuid+alias or Google-authenticated; `table_id` set once; `google_name`, `google_photo`), **WeddingInfo** (couple names, date, color scheme, `winner_table_id`, `carousel_interval`), **CarouselPhoto**, **GalleryPhoto**, **Table** (unique QR links), **Challenge** (10 per table, `locked` flag), **ChallengePhoto** (1/user/reto, `message` field, `UniqueConstraint(challenge_id, user_id)`), **Admin** (credentials).
+Canonical ER diagram in `README.md`. Summary: **User** (anonymous uuid+alias or Google-authenticated; `table_id` set once; `google_name`, `google_photo`; administradores con `email`+`password_hash`+`role='admin'`), **WeddingInfo** (couple names, date, color scheme, `winner_table_id`, `carousel_interval`), **CarouselPhoto**, **GalleryPhoto**, **Table** (unique QR links), **Challenge** (10 per table, `locked` flag), **ChallengePhoto** (1/user/reto, `message` field, `UniqueConstraint(challenge_id, user_id)`).
 
 ## Conventions
 - `README.md` is the canonical architecture reference with Mermaid diagrams
