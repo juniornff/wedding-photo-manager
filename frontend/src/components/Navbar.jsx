@@ -98,6 +98,14 @@ export default function Navbar() {
                   Admin
                 </a>
               )}
+              {user && !user.google_name && !user.google_photo && (
+                <a
+                  href={`/api/google?user_id=${user.id}`}
+                  className="text-xs px-3 py-1 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 transition"
+                >
+                  Conectar Google
+                </a>
+              )}
               <button
                 onClick={logout}
                 className="text-xs text-gray-400 hover:text-gray-600 transition cursor-pointer"

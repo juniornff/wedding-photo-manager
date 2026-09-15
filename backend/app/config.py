@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = ""
     SECRET_KEY: str = ""
     FRONTEND_URL: str = "http://localhost:5173"
+    CORS_ALLOWED_ORIGINS: str = ""
     MAX_UPLOAD_SIZE: int = 25
     RATE_LIMIT_PER_MINUTE: int = 15
     ORPHAN_CLEANUP_INTERVAL: int = 10

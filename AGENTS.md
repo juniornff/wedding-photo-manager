@@ -24,6 +24,8 @@ Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. 
   1. `backend/.env` (= `/app/.env` in the container)
   2. repo root `.env` — makes local runs outside Docker work
 - Real environment variables take precedence over dotenv files; `Settings` uses `extra="ignore"` so unknown vars are tolerated
+- `FRONTEND_URL` apunta al origen canónico del frontend: lo usa CORS, los redirects post-OAuth y el `redirect_uri` de Google. En LAN es `http://localhost:5173`; en producción `https://boda.nehemiasfeliz.com`. **Google solo admite `localhost` o dominios públicos en `redirect_uri`** (jamás IPs privadas); los orígenes LAN extra que pidan CORS (p.ej. el móvil por `http://10.0.0.4:5173`) van en `CORS_ALLOWED_ORIGINS` (CSV)
+- Tras el login de Google de un invitado, el backend redirige a `FRONTEND_URL/?google_user={id}`; `AuthProvider` lee el query param, guarda en localStorage la identidad y limpia la URL (`history.replaceState`). El botón "Conectar Google" de la navbar (`/api/google?user_id=`) vincula la cuenta del invitado existente
 - For local backend runs outside Docker, run from the repo root (or export the values)
 - **No frontend .env** — la API es **relativa** (`import.meta.env.VITE_API_URL || ''`, sin ARG build). El frontend contenedor recibe `VITE_PROXY_TARGET=http://backend:8000` (runtime env que el `<proxy>` de `vite.config.js` usa como target); dev local usa el default `http://localhost:8000`
 

@@ -8,6 +8,24 @@ export function AuthProvider({ children }) {
   const [isAdmin, setIsAdmin] = useState(false);
 
   const checkSession = useCallback(async () => {
+    const params = new URLSearchParams(window.location.search);
+    const googleUserId = params.get('google_user');
+    if (googleUserId) {
+      try {
+        const data = await api(`/api/guest/me?user_id=${googleUserId}`);
+        localStorage.setItem('wedding_uuid', data.uuid);
+        localStorage.setItem('wedding_user_id', data.id);
+        if (data.alias) localStorage.setItem('wedding_alias', data.alias);
+        if (data.google_name) localStorage.setItem('wedding_google_name', data.google_name);
+        if (data.google_photo) localStorage.setItem('wedding_google_photo', data.google_photo);
+        setUser(data);
+      } catch {
+        setUser(null);
+      }
+      window.history.replaceState({}, '', window.location.pathname);
+      setLoading(false);
+      return;
+    }
     try {
       const res = await fetch(`${API_BASE}/api/admin/me`, { credentials: 'include' });
       if (res.ok) {

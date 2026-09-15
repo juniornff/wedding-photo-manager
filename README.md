@@ -682,7 +682,9 @@ Las variables de entorno reales tienen prioridad sobre los dotenv; `extra="ignor
 | `SECRET_KEY` | Clave para session cookies |
 | `NOVIO_EMAIL` / `NOVIA_EMAIL` | Presentes en el `.env`, el código actual no las lee |
 
-Opcionales (defaults en `Settings`, no hace falta ponerlas en `.env`): `ORPHAN_CLEANUP_INTERVAL=10`, `FRONTEND_URL=http://localhost:5173`, `MAX_UPLOAD_SIZE=25`, `RATE_LIMIT_PER_MINUTE=15`, `HOST=0.0.0.0`, `PORT=8000`, `DATABASE_URL`, `UPLOAD_DIR=Fotos`, `THUMBNAILS_DIR=Miniaturas`.
+Opcionales (defaults en `Settings`): `ORPHAN_CLEANUP_INTERVAL=10`, `FRONTEND_URL=http://localhost:5173`, `CORS_ALLOWED_ORIGINS=` (CSV de orígenes extra para CORS, p.ej. `http://10.0.0.4:5173` en LAN), `MAX_UPLOAD_SIZE=25`, `RATE_LIMIT_PER_MINUTE=15`, `HOST=0.0.0.0`, `PORT=8000`, `DATABASE_URL`, `UPLOAD_DIR=Fotos`, `THUMBNAILS_DIR=Miniaturas`.
+
+> **Google OAuth**: el `redirect_uri` se construye desde `FRONTEND_URL` (única), y **Google solo acepta `localhost` o dominios públicos** — una IP privada (p.ej. `10.0.0.4`) no se puede registrar en la consola. Por eso en LAN `FRONTEND_URL=http://localhost:5173` y los dispositivos móviles que entran por IP dependen de `CORS_ALLOWED_ORIGINS` para la API (el login con Google desde el móvil solo funciona por dominio público). Tras el login, el backend redirige a `FRONTEND_URL/?google_user={id}` y el frontend recupera la identidad.
 
 ---
 

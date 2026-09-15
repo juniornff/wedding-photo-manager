@@ -108,7 +108,7 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(user)
 
-    return RedirectResponse(url=settings.FRONTEND_URL)
+    return RedirectResponse(url=f"{settings.FRONTEND_URL}/?google_user={user.id}")
 
 
 @auth_router.post("/admin/login")
