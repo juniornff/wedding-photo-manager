@@ -234,6 +234,7 @@ class AdminUserResponse(BaseModel):
     uuid: str
     alias: str
     role: str = "guest"
+    email: Optional[str] = None
     google_auth: bool = False
     google_name: Optional[str] = None
     google_photo: Optional[str] = None

@@ -639,6 +639,7 @@ def _user_response(user: User) -> AdminUserResponse:
         uuid=user.uuid,
         alias=user.alias,
         role=user.role,
+        email=user.email,
         google_auth=bool(user.google_id),
         google_name=user.google_name,
         google_photo=user.google_photo,

@@ -756,7 +756,7 @@ function UsersTab() {
                             )}
                           </p>
                           <p className="text-xs text-gray-400">
-                            {u.alias}
+                            {u.email || u.alias}
                             {u.google_auth && <span className="ml-1 text-blue-500">• Google</span>}
                           </p>
                         </div>
