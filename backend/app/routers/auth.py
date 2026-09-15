@@ -74,7 +74,11 @@ async def _resolve_admin_user(
         )
         if by_email.table_id is None and by_sub.table_id is not None:
             by_email.table_id = by_sub.table_id
-        await db.delete(by_sub)
+            await db.flush()
+        # Borrar el invitado con SQL directo: el DELETE se ejecuta ya (Core),
+        # antes del flush del UPDATE de abajo, o el UNIQUE(google_id) chocaría
+        # (el unit of work de SQLAlchemy flushea los UPDATE antes que el DELETE).
+        await db.execute(text("DELETE FROM users WHERE id = :src"), {"src": by_sub.id})
         user = by_email
     elif by_email:
         user = by_email
