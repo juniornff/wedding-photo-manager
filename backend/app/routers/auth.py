@@ -48,7 +48,7 @@ async def get_current_guest(
 async def google_login(request: Request, user_id: int | None = None):
     redirect_uri = f"{settings.FRONTEND_URL}/api/google/callback"
     state = str(user_id) if user_id else None
-    return await oauth.google.authorize_redirect(request, redirect_uri, state=state)
+    return await oauth.google.authorize_redirect(request, redirect_uri, state=state, prompt="select_account")
 
 
 async def _resolve_admin_user(
