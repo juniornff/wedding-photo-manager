@@ -153,6 +153,12 @@ class TableWithChallengesResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MyTableResponse(BaseModel):
+    id: int
+    name: str
+    qr_code: str
+
+
 class ChallengeDetailResponse(BaseModel):
     id: int
     table_id: int

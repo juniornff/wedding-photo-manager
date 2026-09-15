@@ -32,9 +32,12 @@ export default function FotografoSecretoPage() {
       .then((data) => {
         setTable(data.table || data);
         setChallenges(data.challenges || []);
+        if (user) {
+          window.dispatchEvent(new CustomEvent('table-assigned'));
+        }
       })
       .catch((err) => setError(err.message));
-  }, [fetchTable]);
+  }, [fetchTable, user]);
 
   useEffect(() => {
     loadTable();

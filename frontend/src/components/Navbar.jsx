@@ -1,11 +1,35 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/useAuth';
+import { api } from '../api';
 
 export default function Navbar() {
   const { user, loading, login, logout, isAdmin } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
   const [alias, setAlias] = useState('');
   const [error, setError] = useState('');
+  const [myTable, setMyTable] = useState(null);
+
+  const fetchMyTable = useCallback(async () => {
+    if (!user?.id) {
+      setMyTable(null);
+      return;
+    }
+    try {
+      const data = await api(`/api/secret-photographer/my-table?user_id=${user.id}`);
+      setMyTable(data);
+    } catch {
+      setMyTable(null);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchMyTable();
+  }, [fetchMyTable]);
+
+  useEffect(() => {
+    window.addEventListener('table-assigned', fetchMyTable);
+    return () => window.removeEventListener('table-assigned', fetchMyTable);
+  }, [fetchMyTable]);
 
   useEffect(() => {
     if (!loading && !user && !isAdmin) {
@@ -45,6 +69,14 @@ export default function Navbar() {
         >
           Fotógrafo Secreto
         </a>
+        {myTable && (
+          <a
+            href={`/fotografo-secreto/${myTable.qr_code}`}
+            className="text-xs px-3 py-1 rounded-full border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-[var(--color-primary)] hover:text-white transition"
+          >
+            Mi Mesa
+          </a>
+        )}
       </div>
 
         <div className="flex items-center gap-3">

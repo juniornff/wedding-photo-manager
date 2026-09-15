@@ -92,6 +92,7 @@ The backend broadcasts these named events via `sse_manager.broadcast()`:
 ### Fotógrafo Secreto specifics
 - `GET /api/secret-photographer/dashboard` (público, sin auth): tablero completo → mesas → retos → fotos (con autor y mensaje) + `winner_table_id/name` desde WeddingInfo
 - `GET /api/secret-photographer/table/{qr_code}?user_id=X`: mesa por QR con retos; cada reto incluye `my_photo` (la foto del usuario actual, si existe) — endpoint público, sin auth
+- `GET /api/secret-photographer/my-table?user_id=X` (público): devuelve `{ id, name, qr_code }` de la mesa asignada al usuario o `null`; lo usa `Navbar` para el botón "Mi Mesa" (enlaza a `/fotografo-secreto/{qr_code}`), actualizándose vía evento `table-assigned` que dispara `FotografoSecretoPage` tras asignar la mesa
 - Un usuario se asigna a una mesa una sola vez (campo `table_id` en User); error si reasigna
 - Reto bloqueado al alcanzar el número de participantes de la mesa; admin puede desbloquear solo para editar/eliminar
 - QR generado como PNG estático en `Fotos/Fotografo-Secreto/Mesa-XX/QR.png`

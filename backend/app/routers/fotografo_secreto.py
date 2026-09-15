@@ -13,6 +13,7 @@ from app.schemas.schemas import (
     DashboardChallengeResponse,
     DashboardTableResponse,
     PhotographerDashboardResponse,
+    MyTableResponse,
 )
 from app.services.photo_service import validate_file, save_photo, generate_thumbnail, check_rate_limit
 from app.services.sse_manager import sse_manager
@@ -201,6 +202,21 @@ async def get_table_by_qr(
         qr_code=table.qr_code,
         challenges=challenge_responses,
     )
+
+
+@secret_router.get("/my-table")
+async def get_my_table(user_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+    if not user.table_id:
+        return None
+    result = await db.execute(select(Table).where(Table.id == user.table_id))
+    table = result.scalar_one_or_none()
+    if not table:
+        return None
+    return MyTableResponse(id=table.id, name=table.name, qr_code=table.qr_code)
 
 
 @secret_router.get("/challenge/{challenge_id}", response_model=ChallengeDetailResponse)

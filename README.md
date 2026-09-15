@@ -618,6 +618,7 @@ Miniaturas/
 | GET | `/api/events` | No | SSE |
 | GET | `/api/secret-photographer/dashboard` | No | Tablero público en vivo |
 | GET | `/api/secret-photographer/table/{qr}` | No | Mesa + retos + my_photo |
+| GET | `/api/secret-photographer/my-table?user_id=X` | No | Mesa del usuario (`{id,name,qr_code}` o `null`); para el botón "Mi Mesa" |
 | POST | `/api/secret-photographer/upload` | No (rate limit) | Subir foto de reto + mensaje |
 | GET | `/api/secret-photographer/challenge/{id}` | No | Detalle reto (blocked) |
 | GET | `/api/admin/tables`, `POST/PUT/DELETE` | Admin | Gestión mesas |
