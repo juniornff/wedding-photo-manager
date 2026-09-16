@@ -4,7 +4,7 @@
 Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. Run everything with `docker compose up` (backend :8001→:8000 in container, frontend exposed on host :5173). `README.md` is the canonical architecture reference (Mermaid ER/use-case/sequence/state/component diagrams); `plan.md` is the original spec.
 
 ## Commands
-- **Run stack:** `docker compose up` — mounts root `Fotos/`, `Miniaturas/`, `data/` and the root `.env` into the backend container. Use `docker compose up -d --build` after changing `.env`
+- **Run stack:** `docker compose up` — mounts root `Fotos/`, `Miniaturas/` and `data/` into the backend container. Use `docker compose up -d --build` after changing `.env` (no need to rebuild for `.env` changes: Compose injects env vars at container start)
 - **Backend local:** `uvicorn app.main:app --reload` from `backend/` — run from repo root so `config.py` finds root `.env`
 - **Frontend dev:** `npm run dev` from `frontend/` — Vite proxies `/api` → `VITE_PROXY_TARGET` (default `http://localhost:8000`)
 - **Frontend lint:** `npm run lint` (oxlint, config in `.oxlintrc.json` — not ESLint). No typecheck script
@@ -19,16 +19,15 @@ Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. 
 - **Deployment:** Docker Compose (backend + frontend); Caddy + Cloudflare en producción
 
 ## Env loading (.env)
-- Root `.env` is the **single** source of secrets (not versioned). docker-compose mounts it to `/app/.env`. **No `.env.example`** exists.
-- `backend/app/config.py` reads env_file from two candidates (missing files are ignored):
-  1. `backend/.env` (= `/app/.env` in the container)
-  2. repo root `.env` — makes local runs outside Docker work
-- Real environment variables take precedence over dotenv files; `Settings` uses `extra="ignore"` so unknown vars are tolerated
+- Root `.env` is the **single** source of config values (not versioned). **No `.env.example`** exists, y **no se monta dentro de los contenedores**: cada docker-compose (`docker-compose.yml` y `docker-compose.prod.yml`) reinyecta en el contenedor **solo las variables que necesita cada servicio**, interpoladas desde el `.env` raíz vía `environment:` (`.env` → Compose → env vars del contenedor). Así ningún contenedor ve secretos que no le corresponden.
+- `backend/app/config.py` reads env_file from **one** candidate: the repo root `.env` (missing files are ignored) — makes local runs outside Docker work
+- Real environment variables take precedence over dotenv files (pydantic-settings); en Docker mandan las env vars inyectadas por Compose y en local el `.env` raíz. `Settings` uses `extra="ignore"` so unknown vars are tolerated
+- Vars del backend declaradas en Compose: `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `NOVIO_EMAIL`, `NOVIO_PASSWORD`, `NOVIA_EMAIL`, `NOVIA_PASSWORD`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SECRET_KEY`, `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`, `PYTHONUNBUFFERED`. El frontend solo recibe `VITE_PROXY_TARGET`
 - `FRONTEND_URL` apunta al origen canónico del frontend: lo usa CORS, los redirects post-OAuth y el `redirect_uri` de Google. En LAN es `http://localhost:5173`; en producción `https://boda.nehemiasfeliz.com`. **Google solo admite `localhost` o dominios públicos en `redirect_uri`** (jamás IPs privadas); los orígenes LAN extra que pidan CORS (p.ej. el móvil por `http://10.0.0.4:5173`) van en `CORS_ALLOWED_ORIGINS` (CSV)
 - Tras el login de Google de un invitado, el backend redirige a `FRONTEND_URL/?google_user={id}`; `AuthProvider` lee el query param, guarda en localStorage la identidad y limpia la URL (`history.replaceState`). El botón "Conectar Google" de la navbar (`/api/google?user_id=`) vincula la cuenta del invitado existente. El authorize (`GET /api/google`) usa `prompt=select_account`: Google muestra siempre el selector de cuentas (no hay single sign-out de Google; el logout de la app no cierra la sesión de Google)
 - **Google exige páginas legales públicas:** el OAuth consent screen pide URL de *Política de Privacidad* y *Condiciones del Servicio* (`/privacidad` y `/terminos` en `FRONTEND_URL`) y una homepage que enlace a ambas (requisito para apps en producción con OAuth; los scopes `openid/email/profile` no requieren verificación de Google)
 - For local backend runs outside Docker, run from the repo root (or export the values)
-- **No frontend .env** — la API es **relativa** (`import.meta.env.VITE_API_URL || ''`, sin ARG build). El frontend contenedor recibe `VITE_PROXY_TARGET=http://backend:8000` (runtime env que el `<proxy>` de `vite.config.js` usa como target); dev local usa el default `http://localhost:8000`
+- **No frontend .env** — la API es **relativa** (`import.meta.env.VITE_API_URL || ''`, sin ARG build). El frontend contenedor recibe `VITE_PROXY_TARGET` vía Compose (`${VITE_PROXY_TARGET:-http://backend:8000}`, interpolado del `.env` raíz si existe) y el `<proxy>` de `vite.config.js` lo usa como target; dev local usa el default `http://localhost:8000`
 - **Avatares de Google:** `index.html` fija `<meta name="referrer" content="no-referrer">`. Google devuelve **429** a las imágenes de perfil (`lh3.googleusercontent.com`) cuando el `Referer` es `http` (localhost/IP LAN); sin referer cargan en dev y en producción. No rompe la API (no usa Referer; CORS va por `Origin`)
 
 ## Backend layout & quirks

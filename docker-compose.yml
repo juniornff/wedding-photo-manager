@@ -8,15 +8,25 @@ services:
       - ./Fotos:/app/Fotos
       - ./Miniaturas:/app/Miniaturas
       - ./data:/app/data
-      - ./.env:/app/.env
     environment:
       - PYTHONUNBUFFERED=1
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - NOVIO_EMAIL=${NOVIO_EMAIL}
+      - NOVIO_PASSWORD=${NOVIO_PASSWORD}
+      - NOVIA_EMAIL=${NOVIA_EMAIL}
+      - NOVIA_PASSWORD=${NOVIA_PASSWORD}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - SECRET_KEY=${SECRET_KEY}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
 
   frontend:
     container_name: wedding-photo-manager-frontend
     build: ./frontend
     environment:
-      - VITE_PROXY_TARGET=http://backend:8000
+      - VITE_PROXY_TARGET=${VITE_PROXY_TARGET:-http://backend:8000}
     ports:
       - "5173:5173"
     depends_on:

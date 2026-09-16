@@ -663,13 +663,9 @@ Miniaturas/
 
 ## Variables de entorno (`.env`)
 
-El archivo `.env` de la raíz (no versionado) es la **única fuente de secretos**. `.env.example` fue **eliminado del repo** (no se usa en ningún punto del código).
+El archivo `.env` de la raíz (no versionado) es la **única fuente de configuración**. `.env.example` fue **eliminado del repo** (no se usa en ningún punto del código).
 
-**Carga** (`backend/app/config.py`): `Settings` lee `env_file` desde dos candidatos (los faltantes se ignoran):
-1. `backend/.env` — en el contenedor es `/app/.env` (el compose monta `./.env` → `/app/.env`)
-2. ruta raíz del repo — hace funcionar los runs locales fuera de Docker
-
-Las variables de entorno reales tienen prioridad sobre los dotenv; `extra="ignore"` tolera claves desconocidas.
+**Carga**: fuera de Docker, `Settings` (`backend/app/config.py`) lee `env_file` del **`.env` raíz** (archivo faltante se ignora). En contenedores, el `.env` **no se monta**: cada `docker-compose` reinyecta en el contenedor **solo las variables que necesita cada servicio** vía `environment:` interpoladas desde el `.env` raíz (`.env` → Compose → env vars del contenedor). Las variables de entorno reales tienen prioridad sobre los dotenv; `extra="ignore"` tolera claves desconocidas.
 
 | Variable | Uso |
 |---|---|
