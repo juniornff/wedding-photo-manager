@@ -26,7 +26,7 @@ services:
     container_name: wedding-photo-manager-frontend
     build: ./frontend
     environment:
-      - VITE_PROXY_TARGET=${VITE_PROXY_TARGET:-http://backend:8000}
+      - VITE_PROXY_TARGET=${VITE_PROXY_TARGET}
     ports:
       - "5173:5173"
     depends_on:

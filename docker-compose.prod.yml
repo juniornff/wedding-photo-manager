@@ -31,7 +31,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      - VITE_PROXY_TARGET=${VITE_PROXY_TARGET:-http://backend:8000}
+      - VITE_PROXY_TARGET=${VITE_PROXY_TARGET}
     networks:
       - default
       - proxy-net
