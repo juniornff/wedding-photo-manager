@@ -12,9 +12,7 @@ services:
       - PYTHONUNBUFFERED=1
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    build: ./frontend
     environment:
       - VITE_PROXY_TARGET=http://backend:8000
     ports:
