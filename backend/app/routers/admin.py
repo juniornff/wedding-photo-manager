@@ -97,6 +97,8 @@ async def update_wedding_info(
         info.novio2_name = body.novio2_name
     if body.wedding_date is not None:
         info.wedding_date = body.wedding_date
+    if "message" in body.model_fields_set:
+        info.message = body.message
     if body.color_scheme is not None:
         info.color_scheme = body.color_scheme
     if body.carousel_interval is not None:
@@ -116,6 +118,7 @@ async def update_wedding_info(
         novio1_name=info.novio1_name,
         novio2_name=info.novio2_name,
         wedding_date=info.wedding_date,
+        message=info.message,
         color_scheme=info.color_scheme,
         carousel_interval=info.carousel_interval or 5,
         winner_table_id=info.winner_table_id,

@@ -96,6 +96,9 @@ export default function MainPage() {
                 {info.novio1_name} & {info.novio2_name}
               </h1>
               <p className="text-lg text-white/90">{info.wedding_date}</p>
+              {info.message && (
+                <p className="text-base text-white/90 mt-2 max-w-xl mx-auto">{info.message}</p>
+              )}
             </div>
           </div>
         </section>

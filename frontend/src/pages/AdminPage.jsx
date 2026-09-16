@@ -85,7 +85,7 @@ function ColorField({ label, desc, value, onChange, defaultVal }) {
 }
 
 function WeddingInfoTab() {
-  const [form, setForm] = useState({ novio1_name: '', novio2_name: '', wedding_date: '', color_primary: '', color_secondary: '', color_accent: '', color_bg: '', color_text: '', carousel_interval: 5 });
+  const [form, setForm] = useState({ novio1_name: '', novio2_name: '', wedding_date: '', message: '', color_primary: '', color_secondary: '', color_accent: '', color_bg: '', color_text: '', carousel_interval: 5 });
   const [msg, setMsg] = useState('');
 
   const initForm = (data) => {
@@ -94,6 +94,7 @@ function WeddingInfoTab() {
       novio1_name: data?.novio1_name || '',
       novio2_name: data?.novio2_name || '',
       wedding_date: data?.wedding_date || '',
+      message: data?.message || '',
       color_primary: colors[0] || '',
       color_secondary: colors[1] || '',
       color_accent: colors[2] || '',
@@ -116,6 +117,7 @@ function WeddingInfoTab() {
           novio1_name: form.novio1_name || null,
           novio2_name: form.novio2_name || null,
           wedding_date: form.wedding_date || null,
+          message: form.message || null,
           color_scheme: parts.length > 0 ? parts.join(',') : null,
           carousel_interval: form.carousel_interval || null,
         }),
@@ -137,16 +139,26 @@ function WeddingInfoTab() {
   return (
     <div className="max-w-lg space-y-4">
       <div>
-        <label className="block text-sm font-medium mb-1">Nombre del primer contrayente</label>
+        <label className="block text-sm font-medium mb-1">Nombre Novio</label>
         <input value={form.novio1_name} onChange={(e) => setForm({ ...form, novio1_name: e.target.value })} className="w-full border rounded-lg p-2 text-sm" />
       </div>
       <div>
-        <label className="block text-sm font-medium mb-1">Nombre del segundo contrayente</label>
+        <label className="block text-sm font-medium mb-1">Nombre Novia</label>
         <input value={form.novio2_name} onChange={(e) => setForm({ ...form, novio2_name: e.target.value })} className="w-full border rounded-lg p-2 text-sm" />
       </div>
       <div>
         <label className="block text-sm font-medium mb-1">Fecha</label>
         <input type="date" value={form.wedding_date} onChange={(e) => setForm({ ...form, wedding_date: e.target.value })} className="w-full border rounded-lg p-2 text-sm" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Mensaje</label>
+        <textarea
+          value={form.message}
+          onChange={(e) => setForm({ ...form, message: e.target.value })}
+          rows="2"
+          placeholder="Mensaje que aparece debajo de la fecha en la portada"
+          className="w-full border rounded-lg p-2 text-sm resize-y"
+        />
       </div>
       <div className="space-y-4 pt-2 border-t border-gray-200">
         <div className="flex items-center justify-between">
@@ -511,28 +523,46 @@ function ChallengesTab() {
 
 function GalleryTab() {
   const [photos, setPhotos] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [filterUserId, setFilterUserId] = useState('');
   const [selectedIdx, setSelectedIdx] = useState(null);
 
   const loadPhotos = () => {
-    api('/api/gallery?offset=0&limit=50')
-      .then((data) => setPhotos(data.items || data.photos || data || []))
+    Promise.all([
+      api('/api/gallery?offset=0&limit=500'),
+      api('/api/admin/users'),
+    ])
+      .then(([gallery, usrs]) => {
+        setPhotos(gallery.items || gallery.photos || gallery || []);
+        setUsers(usrs.items || usrs.photos || usrs || []);
+      })
       .catch(() => {});
   };
 
   useEffect(loadPhotos, []);
 
-  const selected = selectedIdx !== null ? photos[selectedIdx] : null;
+  const filteredPhotos =
+    filterUserId === '' ? photos : photos.filter((p) => (p.user_id ?? null) === (filterUserId === 'anon' ? null : Number(filterUserId)));
+
+  const selected = selectedIdx !== null ? filteredPhotos[selectedIdx] : null;
+
+  const displayName = (u) => u.google_name || u.alias || u.email || `Usuario #${u.id}`;
+
+  const handleFilterChange = (value) => {
+    setFilterUserId(value);
+    setSelectedIdx(null);
+  };
 
   useEffect(() => {
     if (selectedIdx === null) return;
     const handler = (e) => {
       if (e.key === 'Escape') setSelectedIdx(null);
       if (e.key === 'ArrowLeft') setSelectedIdx((i) => (i > 0 ? i - 1 : i));
-      if (e.key === 'ArrowRight') setSelectedIdx((i) => (i < photos.length - 1 ? i + 1 : i));
+      if (e.key === 'ArrowRight') setSelectedIdx((i) => (i < filteredPhotos.length - 1 ? i + 1 : i));
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [selectedIdx, photos.length]);
+  }, [selectedIdx, filteredPhotos.length]);
 
   const handleDelete = async (id) => {
     if (!confirm('¿Eliminar esta foto?')) return;
@@ -551,8 +581,28 @@ function GalleryTab() {
 
   return (
     <div>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label className="text-sm text-gray-600">Filtrar por usuario</label>
+        <select
+          value={filterUserId}
+          onChange={(e) => handleFilterChange(e.target.value)}
+          className="border rounded-lg p-2 text-sm"
+        >
+          <option value="">Todos</option>
+          {users.filter((u) => photos.some((p) => p.user_id === u.id)).map((u) => (
+            <option key={u.id} value={u.id}>{displayName(u)}</option>
+          ))}
+          {photos.some((p) => p.user_id === null) && <option value="anon">Anónimo</option>}
+        </select>
+        {filterUserId !== '' && (
+          <span className="text-xs text-gray-500">{filteredPhotos.length} foto(s)</span>
+        )}
+      </div>
+      {filteredPhotos.length === 0 ? (
+        <p className="text-center text-gray-400 py-10">No hay fotos de este usuario</p>
+      ) : (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {photos.map((photo, idx) => (
+        {filteredPhotos.map((photo, idx) => (
           <div key={photo.id || idx} className="bg-white rounded-xl overflow-hidden shadow-sm">
             <button onClick={() => setSelectedIdx(idx)} className="w-full cursor-pointer border-0 p-0">
               <img src={photo.thumbnail_path ? `${API_BASE}/api/thumbnails/${photo.thumbnail_path}` : photo.path ? `${API_BASE}/api/uploads/${photo.path}` : ''} alt="" className="aspect-square object-cover w-full" loading="lazy" />
@@ -572,6 +622,7 @@ function GalleryTab() {
           </div>
         ))}
       </div>
+      )}
 
       {selected && (
         <div
@@ -595,7 +646,7 @@ function GalleryTab() {
                 alt={selected.message || 'Foto'}
                 className="max-w-full max-h-[70vh] object-contain"
               />
-              {selectedIdx < photos.length - 1 && (
+              {selectedIdx < filteredPhotos.length - 1 && (
                 <button onClick={() => setSelectedIdx(selectedIdx + 1)} className="absolute right-2 top-1/2 -translate-y-1/2 text-white text-4xl hover:opacity-70 cursor-pointer z-10 px-2">›</button>
               )}
             </div>

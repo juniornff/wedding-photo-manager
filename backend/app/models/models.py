@@ -34,6 +34,7 @@ class WeddingInfo(Base):
     novio1_name = Column(String(200), nullable=False)
     novio2_name = Column(String(200), nullable=False)
     wedding_date = Column(Date, nullable=False)
+    message = Column(Text, nullable=True)
     color_scheme = Column(Text, nullable=True)
     carousel_interval = Column(Integer, default=5)
     winner_table_id = Column(Integer, ForeignKey("tables.id"), nullable=True)

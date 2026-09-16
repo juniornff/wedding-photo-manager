@@ -123,8 +123,7 @@ async def lifespan(app: FastAPI):
 
     async with SessionLocal() as db:
         await _ensure_user_roles(db)
-        await init_admin(db)
-        await init_wedding_info(db)
+        # Migraciones ALTER antes de cualquier query ORM (init_* usa el modelo ya extendido).
         try:
             await db.execute(text("ALTER TABLE challenges ADD COLUMN locked BOOLEAN DEFAULT 0"))
             await db.commit()
@@ -136,10 +135,17 @@ async def lifespan(app: FastAPI):
         except Exception:
             pass
         try:
+            await db.execute(text("ALTER TABLE wedding_info ADD COLUMN message TEXT"))
+            await db.commit()
+        except Exception:
+            pass
+        try:
             await db.execute(text("ALTER TABLE challenge_photos ADD COLUMN message VARCHAR(150)"))
             await db.commit()
         except Exception:
             pass
+        await init_admin(db)
+        await init_wedding_info(db)
 
     try:
         async with SessionLocal() as db:

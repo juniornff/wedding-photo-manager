@@ -46,6 +46,7 @@ async def get_wedding_info(db: AsyncSession = Depends(get_db)):
         novio1_name=info.novio1_name,
         novio2_name=info.novio2_name,
         wedding_date=info.wedding_date,
+        message=info.message,
         color_scheme=info.color_scheme,
         carousel_interval=info.carousel_interval or 5,
         winner_table_id=info.winner_table_id,
