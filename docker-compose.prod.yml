@@ -1,5 +1,6 @@
 services:
   backend:
+    container_name: wedding-photo-manager-backend
     build: ./backend
     restart: unless-stopped
     networks:
@@ -14,6 +15,7 @@ services:
       - PYTHONUNBUFFERED=1
 
   frontend:
+    container_name: wedding-photo-manager-frontend
     build:
       context: ./frontend
       dockerfile: Dockerfile
