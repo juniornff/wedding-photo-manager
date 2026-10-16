@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 
 import qrcode
@@ -34,6 +35,9 @@ from app.schemas.schemas import (
     AdminUserResponse,
     UserUpdate,
     UserTableUpdate,
+    UserPreCreate,
+    UserRoleUpdate,
+    ROLES,
 )
 from app.services.photo_service import validate_file, save_photo, generate_thumbnail, delete_photo
 from app.services.sse_manager import sse_manager
@@ -46,18 +50,19 @@ admin_router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depe
 @admin_router.get("/me")
 async def admin_me(request: Request, db: AsyncSession = Depends(get_db)):
     email = request.session.get("admin_email")
-    if not is_admin_email(email):
+    if not email:
         raise HTTPException(status_code=401, detail="No autorizado.")
 
     user = None
     user_id = request.session.get("user_id")
     if user_id is not None:
-        result = await db.execute(select(User).where(User.id == user_id))
-        user = result.scalar_one_or_none()
+        user = await db.get(User, user_id)
     if not user:
         result = await db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
     if not user:
+        if not is_admin_email(email):
+            raise HTTPException(status_code=401, detail="No autorizado.")
         user = User(
             uuid=str(uuid.uuid4()),
             alias="Admin",
@@ -675,6 +680,54 @@ async def _fresh_user_response(user_id: int, db: AsyncSession) -> AdminUserRespo
 async def list_users(db: AsyncSession = Depends(get_db)):
     result = await db.execute(_user_query().order_by(User.created_at.desc()))
     return [_user_response(u) for u in result.scalars().all()]
+
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+@admin_router.post("/users", response_model=AdminUserResponse, status_code=201)
+async def create_user(payload: UserPreCreate, db: AsyncSession = Depends(get_db)):
+    email = payload.email.strip().lower()
+    if not EMAIL_RE.match(email):
+        raise HTTPException(status_code=400, detail="Email inválido.")
+    if payload.role not in ROLES:
+        raise HTTPException(status_code=400, detail="Rol inválido.")
+    result = await db.execute(select(User).where(User.email == email))
+    if result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Ya existe un usuario con ese email.")
+    user = User(
+        uuid=str(uuid.uuid4()),
+        alias=email.split("@")[0] or email,
+        email=email,
+        role=payload.role,
+    )
+    db.add(user)
+    await db.flush()
+    user_id = user.id
+    await db.commit()
+    db.expire_all()
+    return await _fresh_user_response(user_id, db)
+
+
+@admin_router.patch("/users/{user_id}/role", response_model=AdminUserResponse)
+async def update_user_role(
+    user_id: int,
+    payload: UserRoleUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    if payload.role not in ROLES:
+        raise HTTPException(status_code=400, detail="Rol inválido.")
+    user = await _get_user_or_404(user_id, db)
+    if payload.role == "guest" and request.session.get("user_id") == user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No puedes quitarte el rol de administrador a ti mismo.",
+        )
+    user.role = payload.role
+    await db.commit()
+    db.expire_all()
+    return await _fresh_user_response(user_id, db)
 
 
 @admin_router.put("/users/{user_id}", response_model=AdminUserResponse)

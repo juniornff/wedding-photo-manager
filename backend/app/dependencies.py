@@ -25,8 +25,14 @@ async def get_current_user(
     return user
 
 
-async def require_admin(request: Request) -> str:
+async def require_admin(request: Request, db: AsyncSession = Depends(get_db)) -> str:
     email = request.session.get("admin_email")
-    if not is_admin_email(email):
+    if not email:
+        raise HTTPException(status_code=401, detail="No autorizado.")
+    if is_admin_email(email):
+        return email
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if not user or user.role != "admin":
         raise HTTPException(status_code=401, detail="No autorizado.")
     return email

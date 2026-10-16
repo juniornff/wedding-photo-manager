@@ -121,7 +121,13 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
     name = userinfo.get("name")
     picture = userinfo.get("picture")
 
-    if email and is_admin_email(email):
+    if email:
+        result = await db.execute(select(User).where(User.email == email))
+        db_user = result.scalar_one_or_none()
+    else:
+        db_user = None
+
+    if email and (is_admin_email(email) or (db_user and db_user.role == "admin")):
         user = await _resolve_admin_user(db, email, google_id, name, picture)
         request.session["admin_email"] = email
         request.session["user_id"] = user.id
@@ -130,7 +136,33 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.google_id == google_id))
     user = result.scalar_one_or_none()
 
+    if not user and email:
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+        if user:
+            state = request.query_params.get("state")
+            if state and state != "None":
+                try:
+                    state_id = int(state)
+                except (ValueError, TypeError):
+                    state_id = None
+                if state_id and state_id != user.id:
+                    await db.execute(
+                        text("UPDATE gallery_photos SET user_id = :target WHERE user_id = :src"),
+                        {"target": user.id, "src": state_id},
+                    )
+                    await db.execute(
+                        text("UPDATE challenge_photos SET user_id = :target WHERE user_id = :src"),
+                        {"target": user.id, "src": state_id},
+                    )
+                    src = await db.get(User, state_id)
+                    if src and user.table_id is None and src.table_id is not None:
+                        user.table_id = src.table_id
+                        await db.flush()
+                    await db.execute(text("DELETE FROM users WHERE id = :src"), {"src": state_id})
+
     if user:
+        user.google_id = google_id
         user.google_name = name
         user.google_photo = picture
         if email:
@@ -175,7 +207,7 @@ async def admin_login(body: AdminLogin, request: Request, db: AsyncSession = Dep
     user = result.scalar_one_or_none()
     if not user or not user.password_hash or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Credenciales inválidas.")
-    if not is_admin_email(body.email) or user.role != "admin":
+    if user.role != "admin":
         raise HTTPException(status_code=401, detail="No autorizado.")
     request.session["admin_email"] = body.email
     request.session["user_id"] = user.id

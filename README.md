@@ -653,7 +653,7 @@ Miniaturas/
 - Cada participante ve **solo su propia foto** por reto; los espectadores ven **todas** en el dashboard público
 - Dashboard público **en vivo sin login** (EventSource propio); confetti + resaltado al elegir ganador
 - Admin puede **seleccionar y deseleccionar** el ganador; se notifica por SSE
-- **Admin**: los administradores son `User` con `role='admin'` (sin modelo `Admin`): al arranque se hace upsert de `ADMIN_EMAIL`, `NOVIO_EMAIL` y `NOVIA_EMAIL` desde `.env`, cada uno con su password (`ADMIN_PASSWORD`/`NOVIO_PASSWORD`/`NOVIA_PASSWORD`). Login por password (`POST /api/admin/login`) o Google OAuth; un Google login con correo admin **fusiona** automáticamente la identidad previa de invitado (fotos + mesa) en la cuenta admin
+- **Admin**: los administradores son `User` con `role='admin'` (sin modelo `Admin`): al arranque se hace upsert de `ADMIN_EMAIL`, `NOVIO_EMAIL` y `NOVIA_EMAIL` desde `.env`, cada uno con su password (`ADMIN_PASSWORD`/`NOVIO_PASSWORD`/`NOVIA_PASSWORD`). Además, desde el panel admin se pueden **pre-crear usuarios por email** (`POST /api/admin/users`, con rol admin o guest) y **cambiar el rol** de cualquier usuario (`PATCH /api/admin/users/{id}/role`); al entrar con Google, el callback detecta el email y aplica el rol. Login por password (`POST /api/admin/login`) o Google OAuth; un Google login con correo admin **fusiona** automáticamente la identidad previa de invitado (fotos + mesa) en la cuenta admin
 - `Miniaturas/` replica exactamente la estructura de `Fotos/`
 - **Limpieza de archivos huérfanos** cada 10s (`ORPHAN_CLEANUP_INTERVAL`)
 - **SQLite con WAL mode** para concurrencia; sin backups automáticos
@@ -677,7 +677,7 @@ El archivo `.env` de la raíz (no versionado) es la **única fuente de configura
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
 | `SECRET_KEY` | Clave para session cookies |
 
-`is_admin_email()` acepta `ADMIN_EMAIL`, `NOVIO_EMAIL` y `NOVIA_EMAIL`; `get_admin_password(email)` devuelve la password de cada uno (fallback a `ADMIN_PASSWORD`).
+`is_admin_email()` acepta `ADMIN_EMAIL`, `NOVIO_EMAIL` y `NOVIA_EMAIL`; `get_admin_password(email)` devuelve la password de cada uno (fallback a `ADMIN_PASSWORD`). Además, un usuario con `role='admin'` en la tabla `users` es admin aunque su email no esté en el `.env` (los 3 del `.env` se reafirman como admin en cada arranque).
 
 Opcionales (defaults en `Settings`): `ORPHAN_CLEANUP_INTERVAL=10`, `FRONTEND_URL=http://localhost:5173`, `CORS_ALLOWED_ORIGINS=` (CSV de orígenes extra para CORS, p.ej. `http://10.0.0.4:5173` en LAN), `MAX_UPLOAD_SIZE=25`, `RATE_LIMIT_PER_MINUTE=15`, `HOST=0.0.0.0`, `PORT=8000`, `DATABASE_URL`, `UPLOAD_DIR=Fotos`, `THUMBNAILS_DIR=Miniaturas`.
 

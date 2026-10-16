@@ -255,3 +255,15 @@ class UserUpdate(BaseModel):
 
 class UserTableUpdate(BaseModel):
     table_id: Optional[int] = None
+
+
+ROLES = ("admin", "guest")
+
+
+class UserPreCreate(BaseModel):
+    email: str = Field(..., min_length=3, max_length=200)
+    role: str = "guest"
+
+
+class UserRoleUpdate(BaseModel):
+    role: str

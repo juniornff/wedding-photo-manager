@@ -692,6 +692,9 @@ function UsersTab() {
   const [editingId, setEditingId] = useState(null);
   const [draftAlias, setDraftAlias] = useState('');
   const [deleting, setDeleting] = useState(null);
+  const [newEmail, setNewEmail] = useState('');
+  const [newRole, setNewRole] = useState('guest');
+  const [creating, setCreating] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -750,8 +753,73 @@ function UsersTab() {
     }
   };
 
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    const email = newEmail.trim();
+    if (!email) return;
+    setCreating(true);
+    try {
+      await api('/api/admin/users', {
+        method: 'POST',
+        body: JSON.stringify({ email, role: newRole }),
+      });
+      setNewEmail('');
+      setNewRole('guest');
+      await load();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleRoleChange = async (user, role) => {
+    if (
+      role === 'guest' &&
+      !confirm(`¿Quitar el rol de administrador a ${user.google_name || user.alias}?`)
+    ) {
+      return;
+    }
+    try {
+      await api(`/api/admin/users/${user.id}/role`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role }),
+      });
+      await load();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
   return (
     <div>
+      <form onSubmit={handleCreateUser} className="mb-4 flex flex-wrap items-end gap-2 border border-gray-200 rounded-xl p-3 bg-white">
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Pre-crear usuario por email (entrará con Google)</label>
+          <input
+            type="email"
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            placeholder="correo@ejemplo.com"
+            className="border rounded-lg px-2 py-1.5 text-sm w-64"
+          />
+        </div>
+        <select
+          value={newRole}
+          onChange={(e) => setNewRole(e.target.value)}
+          className="border rounded-lg px-2 py-1.5 text-sm bg-white"
+        >
+          <option value="guest">Invitado</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button
+          type="submit"
+          disabled={creating || !newEmail.trim()}
+          className="px-3 py-1.5 text-sm rounded-lg bg-[var(--color-primary)] text-white cursor-pointer disabled:opacity-50"
+        >
+          {creating ? 'Creando...' : 'Crear'}
+        </button>
+      </form>
       <p className="text-sm text-gray-500 mb-3">{users.length} usuarios registrados</p>
       {users.length === 0 ? (
         <p className="text-gray-400">Sin usuarios registrados.</p>
@@ -841,6 +909,12 @@ function UsersTab() {
                   <td className="py-2">
                     {editingId !== u.id && (
                       <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleRoleChange(u, u.role === 'admin' ? 'guest' : 'admin')}
+                          className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded cursor-pointer"
+                        >
+                          {u.role === 'admin' ? 'Hacer invitado' : 'Hacer admin'}
+                        </button>
                         <button
                           onClick={() => {
                             setEditingId(u.id);
