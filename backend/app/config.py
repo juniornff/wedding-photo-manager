@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     CORS_ALLOWED_ORIGINS: str = ""
     MAX_UPLOAD_SIZE: int = 25
     RATE_LIMIT_PER_MINUTE: int = 15
+    DRIVE_RATE_LIMIT_PER_MINUTE: int = 60
     ORPHAN_CLEANUP_INTERVAL: int = 10
 
     model_config = {

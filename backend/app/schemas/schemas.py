@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from datetime import datetime, date
-from typing import Optional
+from typing import Literal, Optional
 
 
 class GuestCreate(BaseModel):
@@ -267,3 +267,20 @@ class UserPreCreate(BaseModel):
 
 class UserRoleUpdate(BaseModel):
     role: str
+
+
+class DriveStatusResponse(BaseModel):
+    google_linked: bool
+    drive_ready: bool
+
+
+class DriveSaveRequest(BaseModel):
+    user_id: int
+    photo_id: int
+    kind: Literal["gallery", "challenge"]
+
+
+class DriveSaveResponse(BaseModel):
+    status: Literal["uploaded", "skipped"]
+    file_name: str
+    folder_id: str

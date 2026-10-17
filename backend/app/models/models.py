@@ -19,6 +19,7 @@ class User(Base):
     google_id = Column(String(100), unique=True, nullable=True)
     google_name = Column(String(200), nullable=True)
     google_photo = Column(String(500), nullable=True)
+    google_refresh_token = Column(Text, nullable=True)
     table_id = Column(Integer, ForeignKey("tables.id"), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 

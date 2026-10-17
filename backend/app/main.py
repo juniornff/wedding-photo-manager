@@ -19,6 +19,7 @@ from app.routers.auth import auth_router
 from app.routers.main import main_router
 from app.routers.fotografo_secreto import secret_router
 from app.routers.admin import admin_router
+from app.routers.drive import drive_router
 from app.routers.sse import sse_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -99,6 +100,7 @@ async def _ensure_user_roles(db):
         "ALTER TABLE users ADD COLUMN email VARCHAR(200)",
         "ALTER TABLE users ADD COLUMN password_hash VARCHAR(200)",
         "ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'guest'",
+        "ALTER TABLE users ADD COLUMN google_refresh_token TEXT",
     ):
         try:
             await db.execute(text(ddl))
@@ -199,6 +201,7 @@ app.include_router(auth_router)
 app.include_router(main_router)
 app.include_router(secret_router)
 app.include_router(admin_router)
+app.include_router(drive_router)
 app.include_router(sse_router)
 
 # Montajes estáticos (las carpetas deben existir antes de montar StaticFiles)

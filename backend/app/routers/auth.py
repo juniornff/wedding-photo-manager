@@ -15,13 +15,16 @@ from app.config import settings, is_admin_email
 
 auth_router = APIRouter(prefix="/api", tags=["auth"])
 
+BASE_SCOPE = 'openid email profile'
+DRIVE_SCOPE = f'{BASE_SCOPE} https://www.googleapis.com/auth/drive.file'
+
 oauth = OAuth()
 oauth.register(
     name='google',
     client_id=settings.GOOGLE_CLIENT_ID,
     client_secret=settings.GOOGLE_CLIENT_SECRET,
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={'scope': 'openid email profile'},
+    client_kwargs={'scope': BASE_SCOPE},
 )
 
 
@@ -46,10 +49,19 @@ async def get_current_guest(
 
 
 @auth_router.get("/google")
-async def google_login(request: Request, user_id: int | None = None):
+async def google_login(request: Request, user_id: int | None = None, drive: bool = False):
     redirect_uri = f"{settings.FRONTEND_URL}/api/google/callback"
     state = str(user_id) if user_id else None
-    return await oauth.google.authorize_redirect(request, redirect_uri, state=state, prompt="select_account")
+    kwargs = {"state": state, "prompt": "select_account"}
+    if drive:
+        # Consentimiento incremental opt-in para guardar en Google Drive:
+        # access_type=offline + prompt=consent garantizan refresh_token.
+        kwargs.update({
+            "scope": DRIVE_SCOPE,
+            "access_type": "offline",
+            "prompt": "select_account consent",
+        })
+    return await oauth.google.authorize_redirect(request, redirect_uri, **kwargs)
 
 
 async def _merge_guest_into_user(db: AsyncSession, target: User, source_id: int) -> None:
@@ -77,11 +89,12 @@ async def _merge_guest_into_user(db: AsyncSession, target: User, source_id: int)
         text("UPDATE challenge_photos SET user_id = :target WHERE user_id = :src"),
         {"target": target.id, "src": source_id},
     )
-    if target.table_id is None:
-        src = await db.get(User, source_id)
-        if src and src.table_id is not None:
-            target.table_id = src.table_id
-            await db.flush()
+    src = await db.get(User, source_id)
+    if target.table_id is None and src and src.table_id is not None:
+        target.table_id = src.table_id
+        await db.flush()
+    if src and not target.google_refresh_token and src.google_refresh_token:
+        target.google_refresh_token = src.google_refresh_token
     # Borrado con SQL directo: el DELETE se ejecuta ya (Core), antes del flush de los
     # UPDATE de google_id, o UNIQUE(users.google_id) chocaría en el mismo commit.
     await db.execute(text("DELETE FROM users WHERE id = :src"), {"src": source_id})
@@ -93,6 +106,7 @@ async def _resolve_admin_user(
     google_id: str,
     name: str | None,
     picture: str | None,
+    refresh_token: str | None = None,
 ) -> User:
     by_email = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
     by_sub = (await db.execute(select(User).where(User.google_id == google_id))).scalar_one_or_none()
@@ -123,6 +137,8 @@ async def _resolve_admin_user(
     user.google_id = google_id
     user.google_name = name
     user.google_photo = picture
+    if refresh_token:
+        user.google_refresh_token = refresh_token
     if not user.alias or user.alias == "Admin":
         user.alias = name or "Admin"
 
@@ -143,6 +159,7 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
     email = email.lower() if email else None
     name = userinfo.get("name")
     picture = userinfo.get("picture")
+    refresh_token = token.get("refresh_token")
 
     state_id = None
     state = request.query_params.get("state")
@@ -159,7 +176,7 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
         db_user = None
 
     if email and (is_admin_email(email) or (db_user and db_user.role == "admin")):
-        user = await _resolve_admin_user(db, email, google_id, name, picture)
+        user = await _resolve_admin_user(db, email, google_id, name, picture, refresh_token)
         request.session["admin_email"] = email
         request.session["user_id"] = user.id
         return RedirectResponse(url=f"{settings.FRONTEND_URL}/admin")
@@ -203,6 +220,11 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
                 google_photo=picture,
             )
             db.add(user)
+
+    # Solo llega en el flujo con drive (access_type=offline + prompt=consent);
+    # en los logins normales no se envía y el token existente se conserva.
+    if refresh_token:
+        user.google_refresh_token = refresh_token
 
     await db.commit()
     await db.refresh(user)
