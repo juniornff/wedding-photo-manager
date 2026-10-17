@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 from contextlib import asynccontextmanager
 
 from pathlib import Path
@@ -9,12 +8,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
-from sqlalchemy import select
+from sqlalchemy import text
 
 from app.config import settings
 from app.database import engine, SessionLocal
-from app.models.models import Base, WeddingInfo
-from sqlalchemy import text
+from app.models.models import Base
 from app.services.auth_service import init_admin, init_wedding_info
 from app.services.photo_service import clean_orphans
 from app.routers.auth import auth_router
@@ -157,9 +155,6 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.warning("Migración user_id nullable no completada", exc_info=True)
 
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    os.makedirs(settings.THUMBNAILS_DIR, exist_ok=True)
-
     global orphan_task
     orphan_task = asyncio.create_task(orphan_cleanup_loop())
 
@@ -206,7 +201,7 @@ app.include_router(secret_router)
 app.include_router(admin_router)
 app.include_router(sse_router)
 
-# Serve uploaded photos and thumbnails via /api/media/...
+# Montajes estáticos (las carpetas deben existir antes de montar StaticFiles)
 Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 Path(settings.THUMBNAILS_DIR).mkdir(parents=True, exist_ok=True)
 app.mount("/api/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")

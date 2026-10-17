@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { API_BASE } from '../api';
+import { photoUrl, authorName } from '../utils';
 
 export default function PhotoLightbox({ photos, index, onClose, onNavigate, onDelete }) {
   const selected = photos[index];
@@ -40,7 +40,7 @@ export default function PhotoLightbox({ photos, index, onClose, onNavigate, onDe
             </button>
           )}
           <img
-            src={`${API_BASE}/api/uploads/${selected.path}`}
+            src={photoUrl(selected.path)}
             alt="Foto"
             className="max-w-full max-h-[70vh] object-contain"
           />
@@ -61,7 +61,7 @@ export default function PhotoLightbox({ photos, index, onClose, onNavigate, onDe
             )}
             <div className="min-w-0">
               <span className="text-sm font-medium truncate block">
-                {selected.user_google_name || selected.user_alias || 'Anónimo'}
+                {authorName(selected)}
               </span>
               {selected.message && (
                 <span className="text-xs text-gray-500 truncate block">{selected.message}</span>
@@ -70,7 +70,7 @@ export default function PhotoLightbox({ photos, index, onClose, onNavigate, onDe
           </div>
           <div className="flex gap-2 shrink-0">
             <a
-              href={`${API_BASE}/api/uploads/${selected.path}`}
+              href={photoUrl(selected.path)}
               download
               className="text-sm px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white hover:brightness-110 transition cursor-pointer"
             >

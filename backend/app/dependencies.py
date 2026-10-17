@@ -7,24 +7,6 @@ from app.models.models import User
 from app.config import is_admin_email
 
 
-async def get_current_user(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-) -> User:
-    uid = request.headers.get("X-User-Id") or request.query_params.get("user_id")
-    if not uid:
-        raise HTTPException(status_code=401, detail="Usuario no identificado.")
-    try:
-        uid_int = int(uid)
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=401, detail="Usuario no identificado.")
-    result = await db.execute(select(User).where(User.id == uid_int))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=401, detail="Usuario no encontrado.")
-    return user
-
-
 async def require_admin(request: Request, db: AsyncSession = Depends(get_db)) -> str:
     email = request.session.get("admin_email")
     if not email:

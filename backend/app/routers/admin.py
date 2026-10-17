@@ -3,9 +3,8 @@ import re
 import uuid
 
 import qrcode
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse
 from sqlalchemy import select, func, delete, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +22,6 @@ from app.schemas.schemas import (
     WeddingInfoResponse,
     WeddingInfoUpdate,
     CarouselPhotoResponse,
-    GalleryPhotoResponse,
     DashboardResponse,
     TableCreate,
     TableResponse,
@@ -40,6 +38,12 @@ from app.schemas.schemas import (
     ROLES,
 )
 from app.services.photo_service import validate_file, save_photo_with_thumbnail, delete_photo
+from app.services.serializers import (
+    wedding_info_response,
+    challenge_photo_response,
+    counts_by_challenge,
+    counts_by_table,
+)
 from app.services.sse_manager import sse_manager
 from app.dependencies import require_admin
 from app.config import settings, is_admin_email
@@ -123,16 +127,7 @@ async def update_wedding_info(
         if winner_table:
             winner_table_name = winner_table.name
 
-    payload = WeddingInfoResponse(
-        novio1_name=info.novio1_name,
-        novio2_name=info.novio2_name,
-        wedding_date=info.wedding_date,
-        message=info.message,
-        color_scheme=info.color_scheme,
-        carousel_interval=info.carousel_interval or 5,
-        winner_table_id=info.winner_table_id,
-        winner_table_name=winner_table_name,
-    )
+    payload = wedding_info_response(info, winner_table_name)
     await sse_manager.broadcast("info_updated", payload.model_dump(mode="json"))
     return payload
 
@@ -337,25 +332,8 @@ async def list_challenges(table_id: int | None = None, db: AsyncSession = Depend
     result = await db.execute(query)
     challenges = result.scalars().all()
 
-    challenge_ids = [c.id for c in challenges]
-    photo_counts: dict[int, int] = {}
-    if challenge_ids:
-        result = await db.execute(
-            select(ChallengePhoto.challenge_id, func.count(ChallengePhoto.id))
-            .where(ChallengePhoto.challenge_id.in_(challenge_ids))
-            .group_by(ChallengePhoto.challenge_id)
-        )
-        photo_counts = dict(result.all())
-
-    table_ids = list({c.table_id for c in challenges})
-    max_by_table: dict[int, int] = {}
-    if table_ids:
-        result = await db.execute(
-            select(User.table_id, func.count(User.id))
-            .where(User.table_id.in_(table_ids))
-            .group_by(User.table_id)
-        )
-        max_by_table = dict(result.all())
+    photo_counts = await counts_by_challenge(db, [c.id for c in challenges])
+    max_by_table = await counts_by_table(db, list({c.table_id for c in challenges}))
 
     return [
         ChallengeResponse(
@@ -469,22 +447,7 @@ async def get_challenge_photos(challenge_id: int, db: AsyncSession = Depends(get
         .order_by(ChallengePhoto.uploaded_at)
     )
     rows = result.all()
-    return [
-        ChallengePhotoResponse(
-            id=cp.id,
-            uuid=cp.uuid,
-            path=cp.path,
-            thumbnail_path=cp.thumbnail_path,
-            message=cp.message,
-            challenge_id=cp.challenge_id,
-            user_id=cp.user_id,
-            user_alias=user.alias if user else None,
-            user_google_name=user.google_name if user else None,
-            user_google_photo=user.google_photo if user else None,
-            uploaded_at=cp.uploaded_at,
-        )
-        for cp, user in rows
-    ]
+    return [challenge_photo_response(cp, user) for cp, user in rows]
 
 
 @admin_router.delete("/challenges/{challenge_id}/photos/{photo_id}", status_code=204)
@@ -560,19 +523,7 @@ async def get_table_photos(table_id: int, db: AsyncSession = Depends(get_db)):
             challenge_id=challenge.id,
             challenge_description=challenge.description,
             photos=[
-                ChallengePhotoResponse(
-                    id=cp.id,
-                    uuid=cp.uuid,
-                    path=cp.path,
-                    thumbnail_path=cp.thumbnail_path,
-                    message=cp.message,
-                    challenge_id=cp.challenge_id,
-                    user_id=cp.user_id,
-                    user_alias=user.alias if user else None,
-                    user_google_name=user.google_name if user else None,
-                    user_google_photo=user.google_photo if user else None,
-                    uploaded_at=cp.uploaded_at,
-                )
+                challenge_photo_response(cp, user)
                 for cp, user in rows_by_challenge.get(challenge.id, [])
             ],
         )
@@ -610,21 +561,6 @@ async def clear_winner(db: AsyncSession = Depends(get_db)):
 
     await sse_manager.broadcast("winner_selected", {"table_id": None})
     return {"message": "Ganador deseleccionado.", "table_id": None}
-
-
-@admin_router.get("/tables/{table_id}/qr")
-async def get_table_qr(table_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Table).where(Table.id == table_id))
-    table = result.scalar_one_or_none()
-    if not table:
-        raise HTTPException(status_code=404, detail="Mesa no encontrada.")
-
-    table_dir = f"Fotografo-Secreto/Mesa-{table.id:02d}"
-    qr_path = os.path.join(settings.UPLOAD_DIR, table_dir, "QR.png")
-    if not os.path.exists(qr_path):
-        raise HTTPException(status_code=404, detail="QR no encontrado.")
-
-    return FileResponse(qr_path, media_type="image/png", filename=f"QR-Mesa-{table.id:02d}.png")
 
 
 @admin_router.get("/dashboard", response_model=DashboardResponse)
@@ -719,6 +655,12 @@ async def _fresh_user_response(user_id: int, db: AsyncSession) -> AdminUserRespo
     return _user_response(user, table_name, gallery_count, challenge_count)
 
 
+async def _commit_and_fresh_user_response(user_id: int, db: AsyncSession) -> AdminUserResponse:
+    await db.commit()
+    db.expire_all()
+    return await _fresh_user_response(user_id, db)
+
+
 @admin_router.get("/users", response_model=list[AdminUserResponse])
 async def list_users(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
@@ -755,10 +697,7 @@ async def create_user(payload: UserPreCreate, db: AsyncSession = Depends(get_db)
     )
     db.add(user)
     await db.flush()
-    user_id = user.id
-    await db.commit()
-    db.expire_all()
-    return await _fresh_user_response(user_id, db)
+    return await _commit_and_fresh_user_response(user.id, db)
 
 
 @admin_router.patch("/users/{user_id}/role", response_model=AdminUserResponse)
@@ -777,9 +716,7 @@ async def update_user_role(
             detail="No puedes quitarte el rol de administrador a ti mismo.",
         )
     user.role = payload.role
-    await db.commit()
-    db.expire_all()
-    return await _fresh_user_response(user_id, db)
+    return await _commit_and_fresh_user_response(user_id, db)
 
 
 @admin_router.put("/users/{user_id}", response_model=AdminUserResponse)
@@ -787,9 +724,7 @@ async def update_user(user_id: int, payload: UserUpdate, db: AsyncSession = Depe
     user = await _get_user_or_404(user_id, db)
     if payload.alias is not None:
         user.alias = payload.alias
-    await db.commit()
-    db.expire_all()
-    return await _fresh_user_response(user_id, db)
+    return await _commit_and_fresh_user_response(user_id, db)
 
 
 @admin_router.patch("/users/{user_id}/table", response_model=AdminUserResponse)
@@ -800,9 +735,7 @@ async def update_user_table(user_id: int, payload: UserTableUpdate, db: AsyncSes
         if not table:
             raise HTTPException(status_code=404, detail="Mesa no encontrada.")
     user.table_id = payload.table_id
-    await db.commit()
-    db.expire_all()
-    return await _fresh_user_response(user_id, db)
+    return await _commit_and_fresh_user_response(user_id, db)
 
 
 @admin_router.delete("/users/{user_id}", status_code=204)

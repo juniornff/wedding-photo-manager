@@ -1,19 +1,14 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import PhotoGrid from '../components/PhotoGrid';
 import PhotoUpload from '../components/PhotoUpload';
 import { useSSE } from '../context/useSSE';
-import { API_BASE, api } from '../api';
-
-function photoUrl(photo) {
-  if (photo.path) return `${API_BASE}/api/uploads/${photo.path}`;
-  return '';
-}
+import { api } from '../api';
+import { photoUrl } from '../utils';
 
 export default function MainPage() {
   const [info, setInfo] = useState(null);
   const [carousel, setCarousel] = useState([]);
   const [carouselIdx, setCarouselIdx] = useState(0);
-  const intervalRef = useRef(null);
   const { lastEvent } = useSSE();
 
   const applyColors = useCallback((colorScheme) => {
@@ -44,7 +39,6 @@ export default function MainPage() {
     const id = setInterval(() => {
       setCarouselIdx((prev) => (prev + 1) % carousel.length);
     }, interval);
-    intervalRef.current = id;
     return () => clearInterval(id);
   }, [carousel.length, info?.carousel_interval]);
 
@@ -86,12 +80,12 @@ export default function MainPage() {
                     style={{ opacity: idx === carouselIdx ? 1 : 0 }}
                   >
                     <img
-                      src={photoUrl(photo)}
+                      src={photoUrl(photo.path)}
                       alt=""
                       className="absolute inset-0 w-full h-full object-cover blur-2xl brightness-75 scale-125"
                     />
                     <img
-                      src={photoUrl(photo)}
+                      src={photoUrl(photo.path)}
                       alt=""
                       className="relative w-full h-full object-contain"
                     />

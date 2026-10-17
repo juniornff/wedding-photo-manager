@@ -23,8 +23,12 @@ from app.services.photo_service import (
     delete_photo,
     check_rate_limit,
 )
+from app.services.serializers import (
+    challenge_photo_response,
+    counts_by_challenge,
+    counts_by_table,
+)
 from app.services.sse_manager import sse_manager
-from app.config import settings
 
 secret_router = APIRouter(prefix="/api/secret-photographer", tags=["secret-photographer"])
 
@@ -64,29 +68,10 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         )
         for cp, user in result.all():
             photos_by_challenge.setdefault(cp.challenge_id, []).append(
-                ChallengePhotoResponse(
-                    id=cp.id,
-                    uuid=cp.uuid,
-                    path=cp.path,
-                    thumbnail_path=cp.thumbnail_path,
-                    message=cp.message,
-                    challenge_id=cp.challenge_id,
-                    user_id=cp.user_id,
-                    user_alias=user.alias if user else None,
-                    user_google_name=user.google_name if user else None,
-                    user_google_photo=user.google_photo if user else None,
-                    uploaded_at=cp.uploaded_at,
-                )
+                challenge_photo_response(cp, user)
             )
 
-    max_by_table: dict[int, int] = {}
-    if tables:
-        result = await db.execute(
-            select(User.table_id, func.count(User.id))
-            .where(User.table_id.in_([t.id for t in tables]))
-            .group_by(User.table_id)
-        )
-        max_by_table = dict(result.all())
+    max_by_table = await counts_by_table(db, [t.id for t in tables])
 
     challenges_by_table: dict[int, list[DashboardChallengeResponse]] = {}
     for c in challenges:
@@ -169,34 +154,14 @@ async def get_table_by_qr(
     )
     max_photos = user_count_result.scalar() or 0
 
-    challenge_ids = [c.id for c in challenges]
-    photo_counts: dict[int, int] = {}
-    if challenge_ids:
-        result = await db.execute(
-            select(ChallengePhoto.challenge_id, func.count(ChallengePhoto.id))
-            .where(ChallengePhoto.challenge_id.in_(challenge_ids))
-            .group_by(ChallengePhoto.challenge_id)
-        )
-        photo_counts = dict(result.all())
+    photo_counts = await counts_by_challenge(db, [c.id for c in challenges])
 
     challenge_responses = []
     for c in challenges:
         my_photo = my_photos.get(c.id)
         my_photo_response = None
         if my_photo:
-            my_photo_response = ChallengePhotoResponse(
-                id=my_photo.id,
-                uuid=my_photo.uuid,
-                path=my_photo.path,
-                thumbnail_path=my_photo.thumbnail_path,
-                message=my_photo.message,
-                challenge_id=my_photo.challenge_id,
-                user_id=my_photo.user_id,
-                user_alias=user.alias if user else None,
-                user_google_name=user.google_name if user else None,
-                user_google_photo=user.google_photo if user else None,
-                uploaded_at=my_photo.uploaded_at,
-            )
+            my_photo_response = challenge_photo_response(my_photo, user)
         challenge_responses.append(ChallengeResponse(
             id=c.id,
             table_id=c.table_id,

@@ -5,7 +5,7 @@ import zipfile
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, StreamingResponse
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -22,6 +22,7 @@ from app.services.photo_service import (
     save_photo_with_thumbnail,
     check_rate_limit,
 )
+from app.services.serializers import wedding_info_response
 from app.services.sse_manager import sse_manager
 from app.config import settings
 
@@ -42,16 +43,7 @@ async def get_wedding_info(db: AsyncSession = Depends(get_db)):
         if winner_table:
             winner_table_name = winner_table.name
 
-    return WeddingInfoResponse(
-        novio1_name=info.novio1_name,
-        novio2_name=info.novio2_name,
-        wedding_date=info.wedding_date,
-        message=info.message,
-        color_scheme=info.color_scheme,
-        carousel_interval=info.carousel_interval or 5,
-        winner_table_id=info.winner_table_id,
-        winner_table_name=winner_table_name,
-    )
+    return wedding_info_response(info, winner_table_name)
 
 
 @main_router.get("/carousel", response_model=list[CarouselPhotoResponse])

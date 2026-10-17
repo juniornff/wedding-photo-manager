@@ -1,27 +1,4 @@
-import LegalLayout from '../components/LegalLayout';
-
-function Section({ title, children }) {
-  return (
-    <section>
-      <h2 className="text-xl font-semibold mb-3" style={{ color: 'var(--color-text)' }}>
-        {title}
-      </h2>
-      <div className="text-gray-700 space-y-3">{children}</div>
-    </section>
-  );
-}
-
-function P({ children }) {
-  return <p>{children}</p>;
-}
-
-function Li({ children }) {
-  return (
-    <li className="ml-5 list-disc">
-      <span>{children}</span>
-    </li>
-  );
-}
+import LegalLayout, { Section, P, Li } from '../components/LegalLayout';
 
 export default function TermsPage() {
   return (

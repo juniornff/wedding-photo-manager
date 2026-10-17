@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import PhotoLightbox from '../components/PhotoLightbox';
 import { API_BASE, api } from '../api';
+import { photoSrc, authorName } from '../utils';
 
 const CONFETTI_COLORS = ['#ffd700', '#e8a0b4', '#f5d6c6', '#c48b9d', '#f4a261', '#94d2bd'];
 
@@ -44,7 +45,7 @@ function ProgressBar({ current, max }) {
 }
 
 function authorChip(photo) {
-  const name = photo.user_google_name || photo.user_alias || 'Anónimo';
+  const name = authorName(photo);
   return (
     <span className="absolute bottom-1 left-1 flex items-center gap-1 bg-black/60 text-white text-[10px] rounded-full px-1.5 py-0.5 max-w-[calc(100%-8px)]">
       {photo.user_google_photo && (
@@ -234,7 +235,7 @@ export default function SecretDashboardPage() {
                                 className={`relative group cursor-pointer ${newIdsRef.current.has(photo.id) ? 'photo-enter' : ''}`}
                               >
                                 <img
-                                  src={photo.thumbnail_path ? `${API_BASE}/api/thumbnails/${photo.thumbnail_path}` : `${API_BASE}/api/uploads/${photo.path}`}
+                                  src={photoSrc(photo)}
                                   alt=""
                                   className="aspect-square object-cover w-full rounded-lg group-hover:opacity-90 transition"
                                   loading="lazy"

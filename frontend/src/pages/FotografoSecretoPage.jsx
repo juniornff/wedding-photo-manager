@@ -3,7 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import PhotoUpload from '../components/PhotoUpload';
 import PhotoLightbox from '../components/PhotoLightbox';
 import { useAuth } from '../context/useAuth';
-import { api, API_BASE } from '../api';
+import { api } from '../api';
+import { photoSrc } from '../utils';
 
 function isBlocked(ch) {
   return ch.photo_count >= ch.max_photos && ch.max_photos > 0 && !ch.locked;
@@ -131,11 +132,7 @@ export default function FotografoSecretoPage() {
                 <div className="flex justify-center mb-3">
                   <button onClick={() => setViewingMyPhoto(true)} className="cursor-pointer group">
                     <img
-                      src={
-                        selectedChallenge.my_photo.thumbnail_path
-                          ? `${API_BASE}/api/thumbnails/${selectedChallenge.my_photo.thumbnail_path}`
-                          : `${API_BASE}/api/uploads/${selectedChallenge.my_photo.path}`
-                      }
+                      src={photoSrc(selectedChallenge.my_photo)}
                       alt="Tu foto"
                       className="max-h-72 rounded-xl object-contain group-hover:opacity-90 transition"
                     />

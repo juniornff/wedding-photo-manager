@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { api, API_BASE } from '../api';
+import { api } from '../api';
+import { photoSrc, photoUrl, authorName } from '../utils';
 import PhotoLightbox from './PhotoLightbox';
 
 export default function ChallengePhotosModal({ challenge, onClose, onDeleted }) {
@@ -58,7 +59,7 @@ export default function ChallengePhotosModal({ challenge, onClose, onDeleted }) 
                 <div key={photo.id || idx} className="bg-gray-50 rounded-lg overflow-hidden border border-gray-100">
                   <button onClick={() => setSelectedId(photo.id)} className="w-full cursor-pointer border-0 p-0">
                     <img
-                      src={photo.thumbnail_path ? `${API_BASE}/api/thumbnails/${photo.thumbnail_path}` : `${API_BASE}/api/uploads/${photo.path}`}
+                      src={photoSrc(photo)}
                       alt=""
                       className="aspect-square object-cover w-full"
                       loading="lazy"
@@ -69,11 +70,11 @@ export default function ChallengePhotosModal({ challenge, onClose, onDeleted }) 
                       {photo.user_google_photo && (
                         <img src={photo.user_google_photo} alt="" className="w-4 h-4 rounded-full object-cover shrink-0" />
                       )}
-                      <span className="text-[11px] truncate">{photo.user_google_name || photo.user_alias || 'Anónimo'}</span>
+                      <span className="text-[11px] truncate">{authorName(photo)}</span>
                     </div>
                     <div className="flex gap-1">
                       <a
-                        href={`${API_BASE}/api/uploads/${photo.path}`}
+                        href={photoUrl(photo.path)}
                         download
                         className="flex-1 text-center text-[11px] py-1 bg-gray-100 rounded cursor-pointer"
                       >

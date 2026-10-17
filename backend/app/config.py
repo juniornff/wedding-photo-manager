@@ -20,8 +20,6 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE: int = 25
     RATE_LIMIT_PER_MINUTE: int = 15
     ORPHAN_CLEANUP_INTERVAL: int = 10
-    HOST: str = "0.0.0.0"
-    PORT: int = 8000
 
     model_config = {
         "env_file": str(Path(__file__).resolve().parent.parent.parent / ".env"),

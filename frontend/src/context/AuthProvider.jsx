@@ -59,7 +59,6 @@ export function AuthProvider({ children }) {
       if (res.ok) {
         const data = await res.json();
         if (data.is_admin) {
-          safeSet('wedding_is_admin', 'true');
           setIsAdmin(true);
           if (data.user_id) {
             safeSet('wedding_uuid', data.uuid);
@@ -78,15 +77,12 @@ export function AuthProvider({ children }) {
             return;
           }
         } else {
-          safeRemove('wedding_is_admin');
           setIsAdmin(false);
         }
       } else {
-        safeRemove('wedding_is_admin');
         setIsAdmin(false);
       }
     } catch {
-      safeRemove('wedding_is_admin');
       setIsAdmin(false);
     }
 
@@ -142,7 +138,6 @@ export function AuthProvider({ children }) {
     safeRemove('wedding_alias');
     safeRemove('wedding_google_name');
     safeRemove('wedding_google_photo');
-    safeRemove('wedding_is_admin');
     safeRemove('wedding_role');
     setUser(null);
     setIsAdmin(false);

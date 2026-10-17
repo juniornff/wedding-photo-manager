@@ -1,8 +1,7 @@
 export const API_BASE = import.meta.env.VITE_API_URL || '';
-const API = API_BASE;
 
 export async function api(path, options = {}) {
-  const res = await fetch(`${API}${path}`, {
+  const res = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
@@ -16,7 +15,7 @@ export async function api(path, options = {}) {
 }
 
 export async function apiUpload(path, formData, options = {}) {
-  const res = await fetch(`${API}${path}`, {
+  const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     credentials: 'include',
     body: formData,

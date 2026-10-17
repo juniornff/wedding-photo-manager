@@ -28,9 +28,5 @@ class SSEManager:
         for client_id in dead_clients:
             self.unregister(client_id)
 
-    @property
-    def client_count(self) -> int:
-        return len(self._clients)
-
 
 sse_manager = SSEManager()

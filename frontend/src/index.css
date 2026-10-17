@@ -36,17 +36,6 @@
   }
 }
 
-@keyframes slide-out-right {
-  from {
-    opacity: 1;
-    transform: translateX(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-}
-
 .photo-enter {
   animation: fade-in-up 0.4s ease-out;
 }
@@ -68,10 +57,6 @@
 
 .toast-enter {
   animation: slide-in-right 0.3s ease-out;
-}
-
-.toast-exit {
-  animation: slide-out-right 0.3s ease-in forwards;
 }
 
 body {

@@ -2,6 +2,29 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 
+export function Section({ title, children }) {
+  return (
+    <section>
+      <h2 className="text-xl font-semibold mb-3" style={{ color: 'var(--color-text)' }}>
+        {title}
+      </h2>
+      <div className="text-gray-700 space-y-3">{children}</div>
+    </section>
+  );
+}
+
+export function P({ children }) {
+  return <p>{children}</p>;
+}
+
+export function Li({ children }) {
+  return (
+    <li className="ml-5 list-disc">
+      <span>{children}</span>
+    </li>
+  );
+}
+
 export default function LegalLayout({ title, updated, children }) {
   const [couple, setCouple] = useState(null);
 

@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import User
-from app.config import settings, get_admin_emails, get_admin_password
+from app.config import get_admin_emails, get_admin_password
 
 PBKDF2_ITERATIONS = 260000
 PBKDF2_PREFIX = "pbkdf2_sha256"

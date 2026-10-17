@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/useAuth';
 import { api, apiUpload, API_BASE } from '../api';
+import { photoSrc, authorName } from '../utils';
 import ChallengePhotosModal from '../components/ChallengePhotosModal';
+import PhotoLightbox from '../components/PhotoLightbox';
 
 function TabButton({ active, onClick, children }) {
   return (
@@ -276,7 +278,7 @@ function CarouselTab() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {photos.map((photo, idx) => (
           <div key={photo.id || idx} className="bg-white rounded-xl overflow-hidden shadow-sm">
-            <img src={photo.thumbnail_path ? `${API_BASE}/api/thumbnails/${photo.thumbnail_path}` : photo.path ? `${API_BASE}/api/uploads/${photo.path}` : ''} alt="" className="aspect-video object-cover w-full" />
+            <img src={photoSrc(photo)} alt="" className="aspect-video object-cover w-full" />
             <div className="p-2 flex justify-between items-center">
               <div className="flex gap-1">
                 <button onClick={() => handleMove(photo.id, 'up')} className="text-xs px-2 py-1 bg-gray-100 rounded cursor-pointer" disabled={idx === 0}>↑</button>
@@ -581,7 +583,6 @@ function GalleryTab() {
     filterUserId === '' ? photos : photos.filter((p) => (p.user_id ?? null) === (filterUserId === 'anon' ? null : Number(filterUserId)));
 
   const selectedIndex = selectedId !== null ? filteredPhotos.findIndex((p) => p.id === selectedId) : -1;
-  const selected = selectedIndex >= 0 ? filteredPhotos[selectedIndex] : null;
 
   const displayName = (u) => u.google_name || u.alias || u.email || `Usuario #${u.id}`;
 
@@ -589,27 +590,6 @@ function GalleryTab() {
     setFilterUserId(value);
     setSelectedId(null);
   };
-
-  useEffect(() => {
-    if (selectedId === null) return;
-    const handler = (e) => {
-      if (e.key === 'Escape') setSelectedId(null);
-      if (e.key === 'ArrowLeft') {
-        setSelectedId((cur) => {
-          const i = filteredPhotos.findIndex((p) => p.id === cur);
-          return i > 0 ? filteredPhotos[i - 1].id : cur;
-        });
-      }
-      if (e.key === 'ArrowRight') {
-        setSelectedId((cur) => {
-          const i = filteredPhotos.findIndex((p) => p.id === cur);
-          return i >= 0 && i < filteredPhotos.length - 1 ? filteredPhotos[i + 1].id : cur;
-        });
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [selectedId, filteredPhotos]);
 
   const handleDelete = async (id) => {
     if (!confirm('¿Eliminar esta foto?')) return;
@@ -652,14 +632,14 @@ function GalleryTab() {
         {filteredPhotos.map((photo, idx) => (
           <div key={photo.id || idx} className="bg-white rounded-xl overflow-hidden shadow-sm">
             <button onClick={() => setSelectedId(photo.id)} className="w-full cursor-pointer border-0 p-0">
-              <img src={photo.thumbnail_path ? `${API_BASE}/api/thumbnails/${photo.thumbnail_path}` : photo.path ? `${API_BASE}/api/uploads/${photo.path}` : ''} alt="" className="aspect-square object-cover w-full" loading="lazy" />
+              <img src={photoSrc(photo)} alt="" className="aspect-square object-cover w-full" loading="lazy" />
             </button>
             <div className="p-2 space-y-1">
               <div className="flex items-center gap-1.5 min-w-0">
                 {photo.user_google_photo && (
                   <img src={photo.user_google_photo} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" />
                 )}
-                <span className="text-xs truncate">{photo.user_google_name || photo.user_alias || 'Anónimo'}</span>
+                <span className="text-xs truncate">{authorName(photo)}</span>
               </div>
               {photo.message && (
                 <p className="text-xs text-gray-500 truncate">{photo.message}</p>
@@ -671,63 +651,14 @@ function GalleryTab() {
       </div>
       )}
 
-      {selected && (
-        <div
-          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
-          onClick={() => setSelectedId(null)}
-        >
-          <div
-            className="relative max-w-3xl w-full max-h-[90vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-end mb-2">
-              <button onClick={() => setSelectedId(null)} className="text-white text-2xl hover:opacity-70 cursor-pointer">&times;</button>
-            </div>
-
-            <div className="relative flex items-center justify-center bg-black/40 rounded-t-xl overflow-hidden min-h-[300px]">
-              {selectedIndex > 0 && (
-                <button onClick={() => setSelectedId(filteredPhotos[selectedIndex - 1].id)} className="absolute left-2 top-1/2 -translate-y-1/2 text-white text-4xl hover:opacity-70 cursor-pointer z-10 px-2">‹</button>
-              )}
-              <img
-                src={selected.path ? `${API_BASE}/api/uploads/${selected.path}` : ''}
-                alt={selected.message || 'Foto'}
-                className="max-w-full max-h-[70vh] object-contain"
-              />
-              {selectedIndex < filteredPhotos.length - 1 && (
-                <button onClick={() => setSelectedId(filteredPhotos[selectedIndex + 1].id)} className="absolute right-2 top-1/2 -translate-y-1/2 text-white text-4xl hover:opacity-70 cursor-pointer z-10 px-2">›</button>
-              )}
-            </div>
-
-            <div className="bg-white rounded-b-xl p-4 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2 min-w-0">
-                {selected.user_google_photo && (
-                  <img src={selected.user_google_photo} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
-                )}
-                <span className="text-sm font-medium truncate">
-                  {selected.user_google_name || selected.user_alias || 'Anónimo'}
-                </span>
-                {selected.message && (
-                  <span className="text-sm text-gray-500 truncate">&mdash; {selected.message}</span>
-                )}
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <a
-                  href={`${API_BASE}/api/gallery/${selected.id}/download`}
-                  download
-                  className="text-sm px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white hover:brightness-110 transition cursor-pointer"
-                >
-                  Descargar
-                </a>
-                <button
-                  onClick={() => handleDelete(selected.id)}
-                  className="text-sm px-4 py-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition cursor-pointer"
-                >
-                  Eliminar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {selectedIndex >= 0 && (
+        <PhotoLightbox
+          photos={filteredPhotos}
+          index={selectedIndex}
+          onClose={() => setSelectedId(null)}
+          onNavigate={(i) => setSelectedId(filteredPhotos[i]?.id ?? null)}
+          onDelete={(photo) => handleDelete(photo.id)}
+        />
       )}
     </div>
   );
@@ -1089,7 +1020,7 @@ function WinnerTab() {
               {ch.photos.map((photo, idx) => (
                 <img
                   key={photo.id || idx}
-                  src={photo.thumbnail_path ? `${API_BASE}/api/thumbnails/${photo.thumbnail_path}` : photo.path ? `${API_BASE}/api/uploads/${photo.path}` : ''}
+                  src={photoSrc(photo)}
                   alt=""
                   className="aspect-square object-cover rounded-lg"
                 />
@@ -1140,7 +1071,7 @@ function AdminLoginForm() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/admin/login`, {
+      const res = await fetch(`${API_BASE}/api/admin/login`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

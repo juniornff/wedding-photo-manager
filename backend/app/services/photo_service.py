@@ -3,7 +3,6 @@ import logging
 import time
 import uuid
 from pathlib import Path
-from io import BytesIO
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Optional
