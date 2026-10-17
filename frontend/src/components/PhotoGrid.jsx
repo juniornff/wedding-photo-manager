@@ -58,12 +58,19 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
   }, [fetchPhotos]);
 
   useEffect(() => {
+    let timer = null;
     const handler = () => {
-      setHasMore(true);
-      fetchPhotos(0, false);
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        setHasMore(true);
+        fetchPhotos(0, false);
+      }, 250);
     };
     window.addEventListener('refresh-gallery', handler);
-    return () => window.removeEventListener('refresh-gallery', handler);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('refresh-gallery', handler);
+    };
   }, [fetchPhotos]);
 
   useEffect(() => {

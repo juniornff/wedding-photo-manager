@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -168,12 +169,18 @@ async def get_table_by_qr(
     )
     max_photos = user_count_result.scalar() or 0
 
+    challenge_ids = [c.id for c in challenges]
+    photo_counts: dict[int, int] = {}
+    if challenge_ids:
+        result = await db.execute(
+            select(ChallengePhoto.challenge_id, func.count(ChallengePhoto.id))
+            .where(ChallengePhoto.challenge_id.in_(challenge_ids))
+            .group_by(ChallengePhoto.challenge_id)
+        )
+        photo_counts = dict(result.all())
+
     challenge_responses = []
     for c in challenges:
-        photo_count_result = await db.execute(
-            select(func.count(ChallengePhoto.id)).where(ChallengePhoto.challenge_id == c.id)
-        )
-        photo_count = photo_count_result.scalar() or 0
         my_photo = my_photos.get(c.id)
         my_photo_response = None
         if my_photo:
@@ -195,7 +202,7 @@ async def get_table_by_qr(
             table_id=c.table_id,
             description=c.description,
             sort_order=c.sort_order,
-            photo_count=photo_count,
+            photo_count=photo_counts.get(c.id, 0),
             max_photos=max_photos,
             locked=c.locked if c.locked is not None else False,
             my_photo=my_photo_response,
@@ -314,7 +321,7 @@ async def upload_challenge_photo(
         raise HTTPException(status_code=400, detail="El mensaje no puede exceder 150 caracteres.")
 
     table_dir = f"Fotografo-Secreto/Mesa-{challenge.table_id:02d}"
-    photo_path, thumbnail_path = save_photo_with_thumbnail(file, table_dir)
+    photo_path, thumbnail_path = await run_in_threadpool(save_photo_with_thumbnail, file, table_dir)
 
     challenge_photo = ChallengePhoto(
         uuid=photo_path.split("/")[-1].split(".")[0],

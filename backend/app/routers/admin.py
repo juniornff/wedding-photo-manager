@@ -4,10 +4,10 @@ import uuid
 
 import qrcode
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from sqlalchemy import select, func, delete, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.models import (
@@ -45,6 +45,10 @@ from app.dependencies import require_admin
 from app.config import settings, is_admin_email
 
 admin_router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
+
+
+def _make_qr(data: str, path: str) -> None:
+    qrcode.make(data).save(path)
 
 
 @admin_router.get("/me")
@@ -148,7 +152,7 @@ async def upload_carousel_photo(
 ):
     validate_file(file)
 
-    photo_path, thumbnail_path = save_photo_with_thumbnail(file, "Carrucel")
+    photo_path, thumbnail_path = await run_in_threadpool(save_photo_with_thumbnail, file, "Carrucel")
 
     result = await db.execute(select(func.max(CarouselPhoto.sort_order)))
     max_order = result.scalar() or -1
@@ -213,16 +217,22 @@ async def delete_gallery_photo(photo_id: int, db: AsyncSession = Depends(get_db)
 async def list_tables(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Table).order_by(Table.name))
     tables = result.scalars().all()
+
+    participants_by_table: dict[int, list[User]] = {}
+    table_ids = [t.id for t in tables]
+    if table_ids:
+        result = await db.execute(
+            select(User).where(User.table_id.in_(table_ids)).order_by(User.alias)
+        )
+        for u in result.scalars().all():
+            participants_by_table.setdefault(u.table_id, []).append(u)
+
     responses = []
     for t in tables:
         table_dir = f"Fotografo-Secreto/Mesa-{t.id:02d}"
         abs_dir = os.path.join(settings.UPLOAD_DIR, table_dir)
         qr_abs_path = os.path.join(abs_dir, "QR.png")
         qr_url = f"/api/uploads/{table_dir}/QR.png" if os.path.exists(qr_abs_path) else None
-        users_result = await db.execute(
-            select(User).where(User.table_id == t.id).order_by(User.alias)
-        )
-        participants = users_result.scalars().all()
         responses.append(TableResponse(
             id=t.id,
             name=t.name,
@@ -230,7 +240,7 @@ async def list_tables(db: AsyncSession = Depends(get_db)):
             qr_url=qr_url,
             participants=[
                 {"id": u.id, "alias": u.alias, "google_name": u.google_name, "google_photo": u.google_photo}
-                for u in participants
+                for u in participants_by_table.get(t.id, [])
             ],
             created_at=t.created_at,
         ))
@@ -249,10 +259,9 @@ async def create_table(body: TableCreate, db: AsyncSession = Depends(get_db)):
     abs_dir = os.path.join(settings.UPLOAD_DIR, table_dir)
     os.makedirs(abs_dir, exist_ok=True)
 
-    qr_url = f"{settings.FRONTEND_URL}/fotografo-secreto/{qr_uuid}"
-    qr_img = qrcode.make(qr_url)
+    qr_data = f"{settings.FRONTEND_URL}/fotografo-secreto/{qr_uuid}"
     qr_path = os.path.join(abs_dir, "QR.png")
-    qr_img.save(qr_path)
+    await run_in_threadpool(_make_qr, qr_data, qr_path)
 
     qr_url = f"/api/uploads/{table_dir}/QR.png"
     return TableResponse(
@@ -328,29 +337,39 @@ async def list_challenges(table_id: int | None = None, db: AsyncSession = Depend
     result = await db.execute(query)
     challenges = result.scalars().all()
 
-    responses = []
-    for c in challenges:
-        photo_count_result = await db.execute(
-            select(func.count(ChallengePhoto.id)).where(ChallengePhoto.challenge_id == c.id)
+    challenge_ids = [c.id for c in challenges]
+    photo_counts: dict[int, int] = {}
+    if challenge_ids:
+        result = await db.execute(
+            select(ChallengePhoto.challenge_id, func.count(ChallengePhoto.id))
+            .where(ChallengePhoto.challenge_id.in_(challenge_ids))
+            .group_by(ChallengePhoto.challenge_id)
         )
-        photo_count = photo_count_result.scalar() or 0
+        photo_counts = dict(result.all())
 
-        user_count_result = await db.execute(
-            select(func.count(User.id)).where(User.table_id == c.table_id)
+    table_ids = list({c.table_id for c in challenges})
+    max_by_table: dict[int, int] = {}
+    if table_ids:
+        result = await db.execute(
+            select(User.table_id, func.count(User.id))
+            .where(User.table_id.in_(table_ids))
+            .group_by(User.table_id)
         )
-        max_photos = user_count_result.scalar() or 0
+        max_by_table = dict(result.all())
 
-        responses.append(ChallengeResponse(
+    return [
+        ChallengeResponse(
             id=c.id,
             table_id=c.table_id,
             description=c.description,
             sort_order=c.sort_order,
-            photo_count=photo_count,
-            max_photos=max_photos,
+            photo_count=photo_counts.get(c.id, 0),
+            max_photos=max_by_table.get(c.table_id, 0),
             locked=c.locked if c.locked is not None else False,
             created_at=c.created_at,
-        ))
-    return responses
+        )
+        for c in challenges
+    ]
 
 
 @admin_router.post("/challenges", response_model=ChallengeResponse, status_code=201)
@@ -524,38 +543,41 @@ async def get_table_photos(table_id: int, db: AsyncSession = Depends(get_db)):
     )
     challenges = result.scalars().all()
 
-    responses = []
-    for challenge in challenges:
+    challenge_ids = [c.id for c in challenges]
+    rows_by_challenge: dict[int, list] = {}
+    if challenge_ids:
         result = await db.execute(
             select(ChallengePhoto, User)
             .outerjoin(User, ChallengePhoto.user_id == User.id)
-            .where(ChallengePhoto.challenge_id == challenge.id)
+            .where(ChallengePhoto.challenge_id.in_(challenge_ids))
             .order_by(ChallengePhoto.uploaded_at)
         )
-        rows = result.all()
-        photos = [
-            ChallengePhotoResponse(
-                id=cp.id,
-                uuid=cp.uuid,
-                path=cp.path,
-                thumbnail_path=cp.thumbnail_path,
-                message=cp.message,
-                challenge_id=cp.challenge_id,
-                user_id=cp.user_id,
-                user_alias=user.alias if user else None,
-                user_google_name=user.google_name if user else None,
-                user_google_photo=user.google_photo if user else None,
-                uploaded_at=cp.uploaded_at,
-            )
-            for cp, user in rows
-        ]
-        responses.append(TablePhotosResponse(
+        for cp, user in result.all():
+            rows_by_challenge.setdefault(cp.challenge_id, []).append((cp, user))
+
+    return [
+        TablePhotosResponse(
             challenge_id=challenge.id,
             challenge_description=challenge.description,
-            photos=photos,
-        ))
-
-    return responses
+            photos=[
+                ChallengePhotoResponse(
+                    id=cp.id,
+                    uuid=cp.uuid,
+                    path=cp.path,
+                    thumbnail_path=cp.thumbnail_path,
+                    message=cp.message,
+                    challenge_id=cp.challenge_id,
+                    user_id=cp.user_id,
+                    user_alias=user.alias if user else None,
+                    user_google_name=user.google_name if user else None,
+                    user_google_photo=user.google_photo if user else None,
+                    uploaded_at=cp.uploaded_at,
+                )
+                for cp, user in rows_by_challenge.get(challenge.id, [])
+            ],
+        )
+        for challenge in challenges
+    ]
 
 
 @admin_router.post("/select-winner")
@@ -634,18 +656,12 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     )
 
 
-def _user_query():
-    return (
-        select(User)
-        .options(
-            selectinload(User.table_rel),
-            selectinload(User.gallery_photos),
-            selectinload(User.challenge_photos),
-        )
-    )
-
-
-def _user_response(user: User) -> AdminUserResponse:
+def _user_response(
+    user: User,
+    table_name: str | None,
+    gallery_count: int,
+    challenge_count: int,
+) -> AdminUserResponse:
     return AdminUserResponse(
         id=user.id,
         uuid=user.uuid,
@@ -656,36 +672,66 @@ def _user_response(user: User) -> AdminUserResponse:
         google_name=user.google_name,
         google_photo=user.google_photo,
         table_id=user.table_id,
-        table_name=user.table_rel.name if user.table_rel else None,
+        table_name=table_name,
         created_at=user.created_at,
-        gallery_count=len(user.gallery_photos),
-        challenge_count=len(user.challenge_photos),
+        gallery_count=gallery_count,
+        challenge_count=challenge_count,
     )
 
 
-async def _fetch_user(user_id: int, db: AsyncSession):
-    result = await db.execute(_user_query().where(User.id == user_id))
-    return result.scalar_one_or_none()
+async def _photo_counts_by_user(db: AsyncSession) -> tuple[dict[int, int], dict[int, int]]:
+    result = await db.execute(
+        select(GalleryPhoto.user_id, func.count(GalleryPhoto.id))
+        .group_by(GalleryPhoto.user_id)
+    )
+    gallery_counts = dict(result.all())
+    result = await db.execute(
+        select(ChallengePhoto.user_id, func.count(ChallengePhoto.id))
+        .group_by(ChallengePhoto.user_id)
+    )
+    challenge_counts = dict(result.all())
+    return gallery_counts, challenge_counts
 
 
 async def _get_user_or_404(user_id: int, db: AsyncSession) -> User:
-    user = await _fetch_user(user_id, db)
+    user = await db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
     return user
 
 
 async def _fresh_user_response(user_id: int, db: AsyncSession) -> AdminUserResponse:
-    user = await _fetch_user(user_id, db)
-    if not user:
+    result = await db.execute(
+        select(User, Table.name)
+        .outerjoin(Table, User.table_id == Table.id)
+        .where(User.id == user_id)
+    )
+    row = result.first()
+    if not row:
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
-    return _user_response(user)
+    user, table_name = row
+    gallery_count = (await db.execute(
+        select(func.count(GalleryPhoto.id)).where(GalleryPhoto.user_id == user_id)
+    )).scalar() or 0
+    challenge_count = (await db.execute(
+        select(func.count(ChallengePhoto.id)).where(ChallengePhoto.user_id == user_id)
+    )).scalar() or 0
+    return _user_response(user, table_name, gallery_count, challenge_count)
 
 
 @admin_router.get("/users", response_model=list[AdminUserResponse])
 async def list_users(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(_user_query().order_by(User.created_at.desc()))
-    return [_user_response(u) for u in result.scalars().all()]
+    result = await db.execute(
+        select(User, Table.name)
+        .outerjoin(Table, User.table_id == Table.id)
+        .order_by(User.created_at.desc())
+    )
+    rows = result.all()
+    gallery_counts, challenge_counts = await _photo_counts_by_user(db)
+    return [
+        _user_response(u, table_name, gallery_counts.get(u.id, 0), challenge_counts.get(u.id, 0))
+        for u, table_name in rows
+    ]
 
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")

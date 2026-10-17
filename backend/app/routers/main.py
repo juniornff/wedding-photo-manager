@@ -2,7 +2,8 @@ import io
 import os
 import zipfile
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -63,8 +64,8 @@ async def get_carousel(db: AsyncSession = Depends(get_db)):
 
 @main_router.get("/gallery", response_model=list[GalleryPhotoResponse])
 async def list_gallery(
-    offset: int = 0,
-    limit: int = 20,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -110,7 +111,7 @@ async def upload_photo(
 
     validate_file(file)
 
-    photo_path, thumbnail_path = save_photo_with_thumbnail(file, "Galeria")
+    photo_path, thumbnail_path = await run_in_threadpool(save_photo_with_thumbnail, file, "Galeria")
 
     gallery_photo = GalleryPhoto(
         uuid=photo_path.split("/")[-1].split(".")[0],
@@ -142,24 +143,40 @@ async def download_photo(photo_id: int, db: AsyncSession = Depends(get_db)):
     return FileResponse(abs_path, filename=os.path.basename(photo.path))
 
 
+MAX_BATCH_DOWNLOAD = 100
+
+
+def _build_zip(entries: list[tuple[str, str]]) -> io.BytesIO:
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for abs_path, arcname in entries:
+            zf.write(abs_path, arcname)
+    zip_buffer.seek(0)
+    return zip_buffer
+
+
 @main_router.post("/gallery/batch-download")
 async def batch_download(body: BatchDownloadRequest, db: AsyncSession = Depends(get_db)):
     if not body.photo_ids:
         raise HTTPException(status_code=400, detail="No se especificaron fotos.")
+    if len(body.photo_ids) > MAX_BATCH_DOWNLOAD:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Máximo {MAX_BATCH_DOWNLOAD} fotos por descarga.",
+        )
 
     result = await db.execute(
         select(GalleryPhoto).where(GalleryPhoto.id.in_(body.photo_ids))
     )
     photos = result.scalars().all()
 
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for photo in photos:
-            abs_path = os.path.join(settings.UPLOAD_DIR, photo.path)
-            if os.path.exists(abs_path):
-                zf.write(abs_path, os.path.basename(photo.path))
+    entries = []
+    for photo in photos:
+        abs_path = os.path.join(settings.UPLOAD_DIR, photo.path)
+        if os.path.exists(abs_path):
+            entries.append((abs_path, os.path.basename(photo.path)))
 
-    zip_buffer.seek(0)
+    zip_buffer = await run_in_threadpool(_build_zip, entries)
     return StreamingResponse(
         zip_buffer,
         media_type='application/zip',

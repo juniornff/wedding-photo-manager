@@ -27,11 +27,15 @@ export default function MainPage() {
   }, []);
 
   useEffect(() => {
-    api('/api/wedding-info').then((data) => {
-      setInfo(data);
-      applyColors(data.color_scheme);
-    }).catch(() => {});
-    api('/api/carousel').then(setCarousel).catch(() => {});
+    Promise.allSettled([api('/api/wedding-info'), api('/api/carousel')]).then(([infoRes, carouselRes]) => {
+      if (infoRes.status === 'fulfilled') {
+        setInfo(infoRes.value);
+        applyColors(infoRes.value.color_scheme);
+      }
+      if (carouselRes.status === 'fulfilled') {
+        setCarousel(carouselRes.value);
+      }
+    });
   }, [applyColors]);
 
   useEffect(() => {
