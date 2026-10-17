@@ -1,9 +1,12 @@
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models.models import Table, Challenge, ChallengePhoto, User, WeddingInfo
 from app.schemas.schemas import (
@@ -16,12 +19,16 @@ from app.schemas.schemas import (
     DashboardTableResponse,
     PhotographerDashboardResponse,
     MyTableResponse,
+    BatchDownloadRequest,
 )
 from app.services.photo_service import (
     validate_file,
     save_photo_with_thumbnail,
     delete_photo,
     check_rate_limit,
+    validate_batch_download,
+    build_zip_file,
+    zip_file_response,
 )
 from app.services.serializers import (
     challenge_photo_response,
@@ -224,6 +231,33 @@ async def get_challenge(challenge_id: int, db: AsyncSession = Depends(get_db)):
         photo_count=photo_count,
         blocked=blocked,
     )
+
+
+@secret_router.post("/batch-download")
+async def batch_download_challenge_photos(
+    body: BatchDownloadRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    validate_batch_download(body.photo_ids)
+
+    result = await db.execute(
+        select(ChallengePhoto).where(ChallengePhoto.id.in_(body.photo_ids))
+    )
+    photos = result.scalars().all()
+
+    entries = []
+    for photo in photos:
+        abs_path = os.path.join(settings.UPLOAD_DIR, photo.path)
+        if os.path.exists(abs_path):
+            parts = photo.path.split('/')
+            arcname = '/'.join(parts[-2:]) if len(parts) >= 2 else parts[-1]
+            entries.append((abs_path, arcname))
+
+    if not entries:
+        raise HTTPException(status_code=404, detail="No se encontraron archivos.")
+
+    zip_path = await run_in_threadpool(build_zip_file, entries)
+    return zip_file_response(zip_path, 'fotos-retos.zip')
 
 
 @secret_router.post("/upload", response_model=ChallengeUploadResponse, status_code=201)

@@ -1,10 +1,8 @@
-import io
 import os
-import zipfile
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +19,9 @@ from app.services.photo_service import (
     validate_file,
     save_photo_with_thumbnail,
     check_rate_limit,
+    validate_batch_download,
+    build_zip_file,
+    zip_file_response,
 )
 from app.services.serializers import wedding_info_response
 from app.services.sse_manager import sse_manager
@@ -135,27 +136,9 @@ async def download_photo(photo_id: int, db: AsyncSession = Depends(get_db)):
     return FileResponse(abs_path, filename=os.path.basename(photo.path))
 
 
-MAX_BATCH_DOWNLOAD = 100
-
-
-def _build_zip(entries: list[tuple[str, str]]) -> io.BytesIO:
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for abs_path, arcname in entries:
-            zf.write(abs_path, arcname)
-    zip_buffer.seek(0)
-    return zip_buffer
-
-
 @main_router.post("/gallery/batch-download")
 async def batch_download(body: BatchDownloadRequest, db: AsyncSession = Depends(get_db)):
-    if not body.photo_ids:
-        raise HTTPException(status_code=400, detail="No se especificaron fotos.")
-    if len(body.photo_ids) > MAX_BATCH_DOWNLOAD:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Máximo {MAX_BATCH_DOWNLOAD} fotos por descarga.",
-        )
+    validate_batch_download(body.photo_ids)
 
     result = await db.execute(
         select(GalleryPhoto).where(GalleryPhoto.id.in_(body.photo_ids))
@@ -168,9 +151,8 @@ async def batch_download(body: BatchDownloadRequest, db: AsyncSession = Depends(
         if os.path.exists(abs_path):
             entries.append((abs_path, os.path.basename(photo.path)))
 
-    zip_buffer = await run_in_threadpool(_build_zip, entries)
-    return StreamingResponse(
-        zip_buffer,
-        media_type='application/zip',
-        headers={'Content-Disposition': 'attachment; filename=fotos.zip'},
-    )
+    if not entries:
+        raise HTTPException(status_code=404, detail="No se encontraron archivos.")
+
+    zip_path = await run_in_threadpool(build_zip_file, entries)
+    return zip_file_response(zip_path, 'fotos-boda.zip')

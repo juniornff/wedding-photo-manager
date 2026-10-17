@@ -1,13 +1,17 @@
 import os
 import logging
+import tempfile
 import time
 import uuid
+import zipfile
 from pathlib import Path
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import UploadFile, HTTPException
+from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 from PIL import Image, ImageOps
 import pillow_heif
 from sqlalchemy import select
@@ -163,6 +167,36 @@ def delete_photo(photo_path: str, thumbnail_path: str) -> None:
         os.remove(abs_photo)
     if os.path.exists(abs_thumb):
         os.remove(abs_thumb)
+
+
+MAX_BATCH_DOWNLOAD = 100
+
+
+def validate_batch_download(photo_ids: list[int]) -> None:
+    if not photo_ids:
+        raise HTTPException(status_code=400, detail="No se especificaron fotos.")
+    if len(photo_ids) > MAX_BATCH_DOWNLOAD:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Máximo {MAX_BATCH_DOWNLOAD} fotos por descarga.",
+        )
+
+
+def build_zip_file(entries: list[tuple[str, str]]) -> str:
+    fd, zip_path = tempfile.mkstemp(suffix='.zip')
+    with os.fdopen(fd, 'wb') as f, zipfile.ZipFile(f, 'w', zipfile.ZIP_STORED) as zf:
+        for abs_path, arcname in entries:
+            zf.write(abs_path, arcname)
+    return zip_path
+
+
+def zip_file_response(zip_path: str, filename: str) -> FileResponse:
+    return FileResponse(
+        zip_path,
+        media_type='application/zip',
+        filename=filename,
+        background=BackgroundTask(os.remove, zip_path),
+    )
 
 
 ORPHAN_GRACE_SECONDS = 60
