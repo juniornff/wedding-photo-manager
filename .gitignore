@@ -10,3 +10,6 @@ Miniaturas/
 *.db-journal
 *.db-wal
 *.db-shm
+.venv/
+backups/
+*.tar.gz
