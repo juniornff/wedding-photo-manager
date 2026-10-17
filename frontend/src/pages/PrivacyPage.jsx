@@ -2,7 +2,7 @@ import LegalLayout, { Section, P, Li } from '../components/LegalLayout';
 
 export default function PrivacyPage() {
   return (
-    <LegalLayout title="Política de Privacidad" updated="15 de septiembre de 2026">
+    <LegalLayout title="Política de Privacidad" updated="17 de octubre de 2026">
       <Section title="1. Responsable del tratamiento">
         <P>
           Esta web (la "Wedding Photo Manager") es gestionada por los novios, responsables del tratamiento de
@@ -31,6 +31,14 @@ export default function PrivacyPage() {
             "Fotógrafo Secreto".
           </Li>
           <Li>
+            Si autorizas el guardado en <strong>Google Drive</strong>: un{' '}
+            <strong>token de autorización renovable</strong> (permiso <em>drive.file</em>) para que
+            la web cree una carpeta y guarde en tu Drive las fotos que tú selecciones. Con este
+            permiso la web solo puede gestionar los archivos que ella misma crea;{' '}
+            <strong>no puede ver el resto de tu Google Drive</strong>. El token se guarda en el
+            servidor de la boda y puedes revocarlo cuando quieras.
+          </Li>
+          <Li>
             Datos de uso: la fecha de tu primer acceso y, si participas en el Fotógrafo Secreto, la{' '}
             <strong>mesa</strong> que los administradores te asignen o que cojas mediante el código
             QR.
@@ -48,6 +56,10 @@ export default function PrivacyPage() {
           <Li>
             Si entras con Google, recuperar tu identidad entre dispositivos para que tus fotos
             queden asociadas a ti.
+          </Li>
+          <Li>
+            Si lo autorizas, guardar en tu Google Drive las fotos que selecciones (una copia; las
+            fotos siguen también en la web).
           </Li>
         </ul>
       </Section>
@@ -93,8 +105,10 @@ export default function PrivacyPage() {
         <ul>
           <Li>No vendemos ni cedemos tus datos a terceros con fines comerciales.</Li>
           <Li>
-            <strong>Google</strong> interviene únicamente como proveedor de autenticación (inicio de
-            sesión). El uso de tus datos por parte de Google se rige por su propia{' '}
+            <strong>Google</strong> interviene como proveedor de autenticación (inicio de sesión)
+            y, solo si lo autorizas, como destino de las fotos que decidas guardar en tu Google
+            Drive (recibe únicamente esas fotos). El uso de tus datos por parte de Google se rige
+            por su propia{' '}
             <a
               href="https://policies.google.com/privacy"
               target="_blank"
@@ -102,6 +116,15 @@ export default function PrivacyPage() {
               className="text-[var(--color-accent)] underline"
             >
               Política de Privacidad
+            </a>
+            . Puedes revocar el acceso de esta web a tu cuenta en{' '}
+            <a
+              href="https://myaccount.google.com/connections"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[var(--color-accent)] underline"
+            >
+              Aplicaciones de terceros de tu cuenta Google
             </a>
             .
           </Li>

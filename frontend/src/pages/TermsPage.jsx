@@ -2,7 +2,7 @@ import LegalLayout, { Section, P, Li } from '../components/LegalLayout';
 
 export default function TermsPage() {
   return (
-    <LegalLayout title="Condiciones del Servicio" updated="15 de septiembre de 2026">
+    <LegalLayout title="Condiciones del Servicio" updated="17 de octubre de 2026">
       <Section title="1. Aceptación de las condiciones">
         <P>
           Al usar la web de la boda (la "Wedding Photo Manager"), y especialmente al subir fotos o iniciar
@@ -14,9 +14,10 @@ export default function TermsPage() {
       <Section title="2. Descripción del servicio">
         <P>
           La web permite a los invitados y a los novios compartir y ver las fotos de la boda:
-          consultar información del evento, subir fotos y mensajes a la galería, descargar fotos y
-          participar en los retos del "Fotógrafo Secreto" organizados por mesas. Los administradores
-          gestionan el contenido (carrusel, galería, mesas, retos, ganador y usuarios).
+          consultar información del evento, subir fotos y mensajes a la galería, descargar fotos,
+          guardar fotos seleccionadas en el Google Drive propio (si se autoriza) y participar en
+          los retos del "Fotógrafo Secreto" organizados por mesas. Los administradores gestionan el
+          contenido (carrusel, galería, mesas, retos, ganador y usuarios).
         </P>
       </Section>
 
@@ -25,7 +26,10 @@ export default function TermsPage() {
           No necesitas crear una cuenta: entras con un <strong>apodo</strong> que elijas y un
           identificador anónimo que conserva tu navegador. El inicio de sesión con{' '}
           <strong>Google</strong> es opcional y sirve para recuperar tu identidad en otros
-          dispositivos. Debes usar datos veraces y no suplantar a otras personas.
+          dispositivos. El guardado en tu <strong>Google Drive</strong> también es opcional y
+          requiere una autorización aparte (permiso <em>drive.file</em>), revocable en cualquier
+          momento desde tu cuenta de Google. Debes usar datos veraces y no suplantar a otras
+          personas.
         </P>
       </Section>
 
