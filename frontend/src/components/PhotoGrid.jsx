@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { API_BASE, api } from '../api';
 import { thumbnailUrl, downloadZip, downloadIndividuals } from '../utils';
 import usePhotoSelection from '../hooks/usePhotoSelection';
+import useLongPress from '../hooks/useLongPress';
 import PhotoLightbox from './PhotoLightbox';
 import SelectionToolbar from './SelectionToolbar';
 import DownloadDialog from './DownloadDialog';
@@ -29,6 +30,10 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
   const sentinelRef = useRef(null);
   const requestIdRef = useRef(0);
   const selection = usePhotoSelection();
+  const lp = useLongPress((id) => {
+    selection.enter();
+    selection.toggle(id);
+  });
 
   const fetchPhotos = useCallback(async (currentOffset, append = false) => {
     const requestId = ++requestIdRef.current;
@@ -92,9 +97,10 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
     return () => obs.disconnect();
   }, [fetchPhotos, offset, hasMore, loadingMore, loading]);
 
-  const handleEnterSelect = () => {
-    setSelectedIdx(null);
-    selection.enter();
+  const handlePhotoClick = (photo, idx) => {
+    if (lp.consumeClick()) return;
+    if (selection.selectMode) selection.toggle(photo.id);
+    else setSelectedIdx(idx);
   };
 
   const handleSelectAll = async () => {
@@ -155,8 +161,6 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
         selectMode={selection.selectMode}
         count={selection.count}
         busy={selectingAll}
-        onEnter={handleEnterSelect}
-        onExit={selection.exit}
         onSelectAll={handleSelectAll}
         onClear={selection.clear}
         onDownload={() => {
@@ -171,8 +175,11 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
           return (
             <button
               key={photo.id || idx}
-              onClick={() => (selection.selectMode ? selection.toggle(photo.id) : setSelectedIdx(idx))}
-              className={`relative rounded-xl overflow-hidden shadow-sm bg-white photo-enter cursor-pointer text-left p-0 border-0 ${
+              onClick={() => handlePhotoClick(photo, idx)}
+              {...(!selection.selectMode ? lp.handlers(photo.id) : {})}
+              onContextMenu={(e) => e.preventDefault()}
+              style={{ WebkitTouchCallout: 'none' }}
+              className={`relative rounded-xl overflow-hidden shadow-sm bg-white photo-enter cursor-pointer text-left p-0 border-0 select-none ${
                 isSelected ? 'ring-2 ring-[var(--color-primary)]' : ''
               }`}
             >

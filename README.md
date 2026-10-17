@@ -77,7 +77,7 @@ graph LR
 - Carrusel de fotos de los novios (`Fotos/Carrucel/`)
 - Galería de fotos subidas por invitados (`Fotos/Galeria/`) — con mensaje opcional (150 caracteres)
 - Botón flotante para subir fotos
-- Descarga múltiple: modo selección → diálogo **ZIP único** (máx. 100 fotos) o **archivos individuales**
+- Descarga múltiple: mantén presionada una foto para activar el modo selección → diálogo **ZIP único** (máx. 100 fotos) o **archivos individuales**
 - Visualización en vivo vía SSE (`new_photo`, `gallery_photo_deleted`, `info_updated`, `carousel_updated`)
 
 ### Módulo Fotógrafo Secreto
@@ -87,14 +87,14 @@ graph LR
 - Mensaje opcional (150 caracteres) también en las fotos de reto
 - Cada participante ve su **propia foto** por reto (badge "✓ Tu foto subida" + lightbox)
 - **Dashboard público** (`/fotografo-secreto`): mesas → retos → fotos con autor, progreso y ganador en vivo, animación de confetti al elegir ganador
-- Descarga múltiple desde el dashboard (selección → ZIP de retos máx. 100 o archivos individuales)
+- Descarga múltiple desde el dashboard (pulsación larga → ZIP de retos máx. 100 o archivos individuales)
 - Admin elige *(y puede deseleccionar)* ganador manualmente
 
 ### Módulo Admin
 - Gestionar carrusel, info de boda, esquema de colores
 - Administrar mesas y retos
 - Ver/descargar/eliminar fotos de cada reto
-- Selección múltiple en el tab Galería (ZIP o individuales; "Todas" respeta el filtro por usuario)
+- Selección múltiple en el tab Galería (pulsación larga; ZIP o individuales; "Todas" respeta el filtro por usuario)
 - Elegir o quitar la mesa ganadora del Fotógrafo Secreto
 
 ---
@@ -674,7 +674,7 @@ Miniaturas/
 - Nombres de archivo con **UUID** para evitar colisiones
 - **Miniatura con caja máxima 150×150px** (aspect ratio preservado, `exif_transpose` aplicado)
 - **Paginación infinita** con offset/limit
-- **Descarga múltiple por selección** (galería, tab Galería del admin y dashboard de retos): modo selección → diálogo **ZIP único** (máx. 100 fotos; se arma en archivo temporal con `ZIP_STORED` y se borra tras enviarse) o **archivos individuales** (sin límite; el navegador puede pedir confirmación para descargas múltiples)
+- **Descarga múltiple por selección** (galería, tab Galería del admin y dashboard de retos): el modo se activa **manteniendo presionada** una foto (queda seleccionada) y se desactiva al quedarse sin selección → diálogo **ZIP único** (máx. 100 fotos; se arma en archivo temporal con `ZIP_STORED` y se borra tras enviarse) o **archivos individuales** (sin límite; el navegador puede pedir confirmación para descargas múltiples)
 - **15 subidas/minuto** por usuario (rate limit) — también en retos
 - Las fotos se sirven **a través de FastAPI** (sin autenticación para visualizar)
 - Mensaje opcional (150 caracteres) en galería **y** en fotos de retos

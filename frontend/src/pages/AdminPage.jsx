@@ -7,6 +7,7 @@ import PhotoLightbox from '../components/PhotoLightbox';
 import SelectionToolbar from '../components/SelectionToolbar';
 import DownloadDialog from '../components/DownloadDialog';
 import usePhotoSelection from '../hooks/usePhotoSelection';
+import useLongPress from '../hooks/useLongPress';
 
 function TabButton({ active, onClick, children }) {
   return (
@@ -599,9 +600,15 @@ function GalleryTab() {
     selection.exit();
   };
 
-  const handleEnterSelect = () => {
-    setSelectedId(null);
+  const lp = useLongPress((id) => {
     selection.enter();
+    selection.toggle(id);
+  });
+
+  const handlePhotoClick = (photo) => {
+    if (lp.consumeClick()) return;
+    if (selection.selectMode) selection.toggle(photo.id);
+    else setSelectedId(photo.id);
   };
 
   const handleDelete = async (id) => {
@@ -662,8 +669,6 @@ function GalleryTab() {
       <SelectionToolbar
         selectMode={selection.selectMode}
         count={selection.count}
-        onEnter={handleEnterSelect}
-        onExit={selection.exit}
         onSelectAll={() => selection.selectAll(filteredPhotos.map((p) => p.id))}
         onClear={selection.clear}
         onDownload={() => {
@@ -681,8 +686,11 @@ function GalleryTab() {
           return (
           <div key={photo.id || idx} className={`bg-white rounded-xl overflow-hidden shadow-sm ${isSelected ? 'ring-2 ring-[var(--color-primary)]' : ''}`}>
             <button
-              onClick={() => (selection.selectMode ? selection.toggle(photo.id) : setSelectedId(photo.id))}
-              className="relative w-full cursor-pointer border-0 p-0"
+              onClick={() => handlePhotoClick(photo)}
+              {...(!selection.selectMode ? lp.handlers(photo.id) : {})}
+              onContextMenu={(e) => e.preventDefault()}
+              style={{ WebkitTouchCallout: 'none' }}
+              className="relative w-full cursor-pointer border-0 p-0 select-none"
             >
               <img src={photoSrc(photo)} alt="" className="aspect-square object-cover w-full" loading="lazy" />
               {selection.selectMode && (

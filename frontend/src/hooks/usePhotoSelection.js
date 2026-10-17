@@ -1,8 +1,12 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export default function usePhotoSelection() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
+
+  useEffect(() => {
+    if (selectMode && selectedIds.size === 0) setSelectMode(false);
+  }, [selectMode, selectedIds]);
 
   const enter = useCallback(() => setSelectMode(true), []);
 

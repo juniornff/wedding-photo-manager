@@ -4,6 +4,7 @@ import PhotoLightbox from '../components/PhotoLightbox';
 import SelectionToolbar from '../components/SelectionToolbar';
 import DownloadDialog from '../components/DownloadDialog';
 import usePhotoSelection from '../hooks/usePhotoSelection';
+import useLongPress from '../hooks/useLongPress';
 import { API_BASE, api } from '../api';
 import { photoSrc, photoUrl, authorName, downloadZip, downloadIndividuals } from '../utils';
 
@@ -126,9 +127,16 @@ export default function SecretDashboardPage() {
   const totalMax = dashboard?.tables?.reduce((acc, t) => acc + t.max_photos, 0) ?? 0;
   const isComplete = (ch) => ch.max_photos > 0 && ch.photo_count >= ch.max_photos;
 
-  const handleEnterSelect = () => {
+  const lp = useLongPress((id) => {
     setLightbox(null);
     selection.enter();
+    selection.toggle(id);
+  });
+
+  const handlePhotoClick = (challenge, photo, i) => {
+    if (lp.consumeClick()) return;
+    if (selection.selectMode) selection.toggle(photo.id);
+    else setLightbox({ challengeId: challenge.id, index: i });
   };
 
   const handleDownload = async (mode) => {
@@ -201,8 +209,6 @@ export default function SecretDashboardPage() {
         <SelectionToolbar
           selectMode={selection.selectMode}
           count={selection.count}
-          onEnter={handleEnterSelect}
-          onExit={selection.exit}
           onSelectAll={() => selection.selectAll(allPhotos.map((p) => p.id))}
           onClear={selection.clear}
           onDownload={() => {
@@ -283,8 +289,11 @@ export default function SecretDashboardPage() {
                               return (
                               <button
                                 key={photo.id}
-                                onClick={() => (selection.selectMode ? selection.toggle(photo.id) : setLightbox({ challengeId: challenge.id, index: i }))}
-                                className={`relative group cursor-pointer rounded-lg ${newIdsRef.current.has(photo.id) ? 'photo-enter' : ''} ${isSelected ? 'ring-2 ring-[var(--color-primary)]' : ''}`}
+                                onClick={() => handlePhotoClick(challenge, photo, i)}
+                                {...(!selection.selectMode ? lp.handlers(photo.id) : {})}
+                                onContextMenu={(e) => e.preventDefault()}
+                                style={{ WebkitTouchCallout: 'none' }}
+                                className={`relative group cursor-pointer rounded-lg select-none ${newIdsRef.current.has(photo.id) ? 'photo-enter' : ''} ${isSelected ? 'ring-2 ring-[var(--color-primary)]' : ''}`}
                               >
                                 <img
                                   src={photoSrc(photo)}
