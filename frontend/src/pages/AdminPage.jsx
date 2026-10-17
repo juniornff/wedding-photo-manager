@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/useAuth';
 import { api, apiUpload, API_BASE } from '../api';
-import { photoSrc, authorName } from '../utils';
+import { photoSrc, authorName, downloadZip, downloadIndividuals } from '../utils';
 import ChallengePhotosModal from '../components/ChallengePhotosModal';
 import PhotoLightbox from '../components/PhotoLightbox';
+import SelectionToolbar from '../components/SelectionToolbar';
+import DownloadDialog from '../components/DownloadDialog';
+import usePhotoSelection from '../hooks/usePhotoSelection';
 
 function TabButton({ active, onClick, children }) {
   return (
@@ -564,6 +567,10 @@ function GalleryTab() {
   const [users, setUsers] = useState([]);
   const [filterUserId, setFilterUserId] = useState('');
   const [selectedId, setSelectedId] = useState(null);
+  const [showDialog, setShowDialog] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState(null);
+  const [downloadError, setDownloadError] = useState(null);
+  const selection = usePhotoSelection();
 
   const loadPhotos = () => {
     Promise.all([
@@ -589,6 +596,12 @@ function GalleryTab() {
   const handleFilterChange = (value) => {
     setFilterUserId(value);
     setSelectedId(null);
+    selection.exit();
+  };
+
+  const handleEnterSelect = () => {
+    setSelectedId(null);
+    selection.enter();
   };
 
   const handleDelete = async (id) => {
@@ -597,8 +610,28 @@ function GalleryTab() {
       await api(`/api/admin/gallery/${id}`, { method: 'DELETE' });
       setSelectedId((cur) => (cur === id ? null : cur));
       setPhotos((prev) => prev.filter((p) => p.id !== id));
+      selection.remove(id);
     } catch (err) {
       alert(err.message);
+    }
+  };
+
+  const handleDownload = async (mode) => {
+    const ids = [...selection.selectedIds];
+    setDownloadError(null);
+    setDownloadBusy(mode);
+    try {
+      if (mode === 'zip') {
+        await downloadZip(ids, '/api/gallery/batch-download', 'fotos-boda.zip');
+      } else {
+        downloadIndividuals(ids.map((id) => `${API_BASE}/api/gallery/${id}/download`)).catch(() => {});
+      }
+      setShowDialog(false);
+      selection.exit();
+    } catch (err) {
+      setDownloadError(err.message);
+    } finally {
+      setDownloadBusy(null);
     }
   };
 
@@ -625,14 +658,44 @@ function GalleryTab() {
           <span className="text-xs text-gray-500">{filteredPhotos.length} foto(s)</span>
         )}
       </div>
+
+      <SelectionToolbar
+        selectMode={selection.selectMode}
+        count={selection.count}
+        onEnter={handleEnterSelect}
+        onExit={selection.exit}
+        onSelectAll={() => selection.selectAll(filteredPhotos.map((p) => p.id))}
+        onClear={selection.clear}
+        onDownload={() => {
+          setDownloadError(null);
+          setShowDialog(true);
+        }}
+      />
+
       {filteredPhotos.length === 0 ? (
         <p className="text-center text-gray-400 py-10">No hay fotos de este usuario</p>
       ) : (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {filteredPhotos.map((photo, idx) => (
-          <div key={photo.id || idx} className="bg-white rounded-xl overflow-hidden shadow-sm">
-            <button onClick={() => setSelectedId(photo.id)} className="w-full cursor-pointer border-0 p-0">
+        {filteredPhotos.map((photo, idx) => {
+          const isSelected = selection.selectMode && selection.selectedIds.has(photo.id);
+          return (
+          <div key={photo.id || idx} className={`bg-white rounded-xl overflow-hidden shadow-sm ${isSelected ? 'ring-2 ring-[var(--color-primary)]' : ''}`}>
+            <button
+              onClick={() => (selection.selectMode ? selection.toggle(photo.id) : setSelectedId(photo.id))}
+              className="relative w-full cursor-pointer border-0 p-0"
+            >
               <img src={photoSrc(photo)} alt="" className="aspect-square object-cover w-full" loading="lazy" />
+              {selection.selectMode && (
+                <span
+                  className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center text-white text-xs ${
+                    isSelected
+                      ? 'bg-[var(--color-primary)] border-[var(--color-primary)]'
+                      : 'bg-black/30 border-white'
+                  }`}
+                >
+                  {isSelected ? '✓' : ''}
+                </span>
+              )}
             </button>
             <div className="p-2 space-y-1">
               <div className="flex items-center gap-1.5 min-w-0">
@@ -644,20 +707,36 @@ function GalleryTab() {
               {photo.message && (
                 <p className="text-xs text-gray-500 truncate">{photo.message}</p>
               )}
-              <button onClick={() => handleDelete(photo.id)} className="w-full text-xs py-1 bg-red-100 text-red-600 rounded cursor-pointer">Eliminar</button>
+              {!selection.selectMode && (
+                <button onClick={() => handleDelete(photo.id)} className="w-full text-xs py-1 bg-red-100 text-red-600 rounded cursor-pointer">Eliminar</button>
+              )}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
       )}
 
-      {selectedIndex >= 0 && (
+      {!selection.selectMode && selectedIndex >= 0 && (
         <PhotoLightbox
           photos={filteredPhotos}
           index={selectedIndex}
           onClose={() => setSelectedId(null)}
           onNavigate={(i) => setSelectedId(filteredPhotos[i]?.id ?? null)}
           onDelete={(photo) => handleDelete(photo.id)}
+        />
+      )}
+
+      {showDialog && (
+        <DownloadDialog
+          count={selection.count}
+          busy={downloadBusy}
+          error={downloadError}
+          onZip={() => handleDownload('zip')}
+          onIndividual={() => handleDownload('individual')}
+          onClose={() => {
+            if (!downloadBusy) setShowDialog(false);
+          }}
         />
       )}
     </div>

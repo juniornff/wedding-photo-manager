@@ -1,13 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { API_BASE } from '../api';
-import { thumbnailUrl } from '../utils';
+import { API_BASE, api } from '../api';
+import { thumbnailUrl, downloadZip, downloadIndividuals } from '../utils';
+import usePhotoSelection from '../hooks/usePhotoSelection';
 import PhotoLightbox from './PhotoLightbox';
+import SelectionToolbar from './SelectionToolbar';
+import DownloadDialog from './DownloadDialog';
 
 const Skeleton = () => (
   <div className="rounded-xl overflow-hidden shadow-sm">
     <div className="skeleton aspect-square" />
   </div>
 );
+
+const PAGE_SIZE = 12;
+const SELECT_ALL_PAGE_SIZE = 500;
 
 export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún' }) {
   const [photos, setPhotos] = useState([]);
@@ -16,15 +22,20 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [selectedIdx, setSelectedIdx] = useState(null);
+  const [selectingAll, setSelectingAll] = useState(false);
+  const [showDialog, setShowDialog] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState(null);
+  const [downloadError, setDownloadError] = useState(null);
   const sentinelRef = useRef(null);
   const requestIdRef = useRef(0);
+  const selection = usePhotoSelection();
 
   const fetchPhotos = useCallback(async (currentOffset, append = false) => {
     const requestId = ++requestIdRef.current;
     if (!append) setLoading(true);
     else setLoadingMore(true);
     try {
-      const url = `${fetchUrl}${fetchUrl.includes('?') ? '&' : '?'}offset=${currentOffset}&limit=12`;
+      const url = `${fetchUrl}${fetchUrl.includes('?') ? '&' : '?'}offset=${currentOffset}&limit=${PAGE_SIZE}`;
       const res = await fetch(`${API_BASE}${url}`);
       if (!res.ok) throw new Error('Error al cargar fotos');
       const data = await res.json();
@@ -36,7 +47,7 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
         setPhotos(items);
       }
       setOffset(currentOffset + items.length);
-      if (items.length < 12) setHasMore(false);
+      if (items.length < PAGE_SIZE) setHasMore(false);
     } catch {
       if (requestId === requestIdRef.current) setHasMore(false);
     } finally {
@@ -81,6 +92,51 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
     return () => obs.disconnect();
   }, [fetchPhotos, offset, hasMore, loadingMore, loading]);
 
+  const handleEnterSelect = () => {
+    setSelectedIdx(null);
+    selection.enter();
+  };
+
+  const handleSelectAll = async () => {
+    setSelectingAll(true);
+    try {
+      const allIds = [];
+      let currentOffset = 0;
+      for (;;) {
+        const url = `${fetchUrl}${fetchUrl.includes('?') ? '&' : '?'}offset=${currentOffset}&limit=${SELECT_ALL_PAGE_SIZE}`;
+        const data = await api(url);
+        const items = Array.isArray(data) ? data : (data.items || data.photos || []);
+        allIds.push(...items.map((p) => p.id));
+        currentOffset += items.length;
+        if (items.length < SELECT_ALL_PAGE_SIZE) break;
+      }
+      selection.selectAll(allIds);
+    } catch {
+      selection.selectAll(photos.map((p) => p.id));
+    } finally {
+      setSelectingAll(false);
+    }
+  };
+
+  const handleDownload = async (mode) => {
+    const ids = [...selection.selectedIds];
+    setDownloadError(null);
+    setDownloadBusy(mode);
+    try {
+      if (mode === 'zip') {
+        await downloadZip(ids, '/api/gallery/batch-download', 'fotos-boda.zip');
+      } else {
+        downloadIndividuals(ids.map((id) => `${API_BASE}/api/gallery/${id}/download`)).catch(() => {});
+      }
+      setShowDialog(false);
+      selection.exit();
+    } catch (err) {
+      setDownloadError(err.message);
+    } finally {
+      setDownloadBusy(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -95,29 +151,72 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
 
   return (
     <div>
+      <SelectionToolbar
+        selectMode={selection.selectMode}
+        count={selection.count}
+        busy={selectingAll}
+        onEnter={handleEnterSelect}
+        onExit={selection.exit}
+        onSelectAll={handleSelectAll}
+        onClear={selection.clear}
+        onDownload={() => {
+          setDownloadError(null);
+          setShowDialog(true);
+        }}
+      />
+
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {photos.map((photo, idx) => (
-          <button
-            key={photo.id || idx}
-            onClick={() => setSelectedIdx(idx)}
-            className="rounded-xl overflow-hidden shadow-sm bg-white photo-enter cursor-pointer text-left p-0 border-0"
-          >
-            <img
-              src={thumbnailUrl(photo.thumbnail_path)}
-              alt={photo.message || 'Foto'}
-              className="aspect-square object-cover w-full"
-              loading="lazy"
-            />
-          </button>
-        ))}
+        {photos.map((photo, idx) => {
+          const isSelected = selection.selectMode && selection.selectedIds.has(photo.id);
+          return (
+            <button
+              key={photo.id || idx}
+              onClick={() => (selection.selectMode ? selection.toggle(photo.id) : setSelectedIdx(idx))}
+              className={`relative rounded-xl overflow-hidden shadow-sm bg-white photo-enter cursor-pointer text-left p-0 border-0 ${
+                isSelected ? 'ring-2 ring-[var(--color-primary)]' : ''
+              }`}
+            >
+              <img
+                src={thumbnailUrl(photo.thumbnail_path)}
+                alt={photo.message || 'Foto'}
+                className="aspect-square object-cover w-full"
+                loading="lazy"
+              />
+              {selection.selectMode && (
+                <span
+                  className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center text-white text-xs ${
+                    isSelected
+                      ? 'bg-[var(--color-primary)] border-[var(--color-primary)]'
+                      : 'bg-black/30 border-white'
+                  }`}
+                >
+                  {isSelected ? '✓' : ''}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {selectedIdx !== null && (
+      {!selection.selectMode && selectedIdx !== null && (
         <PhotoLightbox
           photos={photos}
           index={selectedIdx}
           onClose={() => setSelectedIdx(null)}
           onNavigate={setSelectedIdx}
+        />
+      )}
+
+      {showDialog && (
+        <DownloadDialog
+          count={selection.count}
+          busy={downloadBusy}
+          error={downloadError}
+          onZip={() => handleDownload('zip')}
+          onIndividual={() => handleDownload('individual')}
+          onClose={() => {
+            if (!downloadBusy) setShowDialog(false);
+          }}
         />
       )}
 

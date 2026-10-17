@@ -77,6 +77,7 @@ graph LR
 - Carrusel de fotos de los novios (`Fotos/Carrucel/`)
 - Galería de fotos subidas por invitados (`Fotos/Galeria/`) — con mensaje opcional (150 caracteres)
 - Botón flotante para subir fotos
+- Descarga múltiple: modo selección → diálogo **ZIP único** (máx. 100 fotos) o **archivos individuales**
 - Visualización en vivo vía SSE (`new_photo`, `gallery_photo_deleted`, `info_updated`, `carousel_updated`)
 
 ### Módulo Fotógrafo Secreto
@@ -86,12 +87,14 @@ graph LR
 - Mensaje opcional (150 caracteres) también en las fotos de reto
 - Cada participante ve su **propia foto** por reto (badge "✓ Tu foto subida" + lightbox)
 - **Dashboard público** (`/fotografo-secreto`): mesas → retos → fotos con autor, progreso y ganador en vivo, animación de confetti al elegir ganador
+- Descarga múltiple desde el dashboard (selección → ZIP de retos máx. 100 o archivos individuales)
 - Admin elige *(y puede deseleccionar)* ganador manualmente
 
 ### Módulo Admin
 - Gestionar carrusel, info de boda, esquema de colores
 - Administrar mesas y retos
 - Ver/descargar/eliminar fotos de cada reto
+- Selección múltiple en el tab Galería (ZIP o individuales; "Todas" respeta el filtro por usuario)
 - Elegir o quitar la mesa ganadora del Fotógrafo Secreto
 
 ---
@@ -430,6 +433,7 @@ classDiagram
         +get_table_by_qr()
         +get_my_table()
         +get_challenge()
+        +batch_download_challenge_photos()
         +upload_challenge_photo()
     }
 
@@ -532,6 +536,7 @@ graph TB
     ADMIN_PAGE[AdminPage /admin]
 
     PUB_LIGHTBOX[PhotoLightbox]
+    SELECT_UI[SelectionToolbar + DownloadDialog]
 
     subgraph "MainPage"
         GRID[PhotoGrid]
@@ -589,6 +594,10 @@ graph TB
 
     TAB_RETOS --> CHAL_MODAL
     CHAL_MODAL --> PUB_LIGHTBOX
+
+    GRID --> SELECT_UI
+    SD_GRID --> SELECT_UI
+    TAB_GALERIA --> SELECT_UI
 ```
 
 ---
@@ -622,7 +631,7 @@ Miniaturas/
 | GET | `/api/gallery` | No | Galería (paginación offset/limit) |
 | POST | `/api/gallery/upload` | No (rate limit) | Subir foto + mensaje |
 | GET | `/api/gallery/{id}/download` | No | Descargar una foto |
-| POST | `/api/gallery/batch-download` | No | Descargar varias (máx. 100 ids) |
+| POST | `/api/gallery/batch-download` | No | Descargar varias en ZIP (máx. 100 ids) |
 | POST | `/api/guest`, `GET /api/guest/me` | No | Alta/consulta de invitado anónimo |
 | GET | `/api/google`, `/api/google/callback` | No | OAuth Google |
 | POST | `/api/admin/login`, `/api/logout` | — | Sesión admin |
@@ -632,6 +641,7 @@ Miniaturas/
 | GET | `/api/secret-photographer/table/{qr}` | No | Mesa + retos + my_photo |
 | GET | `/api/secret-photographer/my-table?user_id=X` | No | Mesa del usuario (`{id,name,qr_code}` o `null`); para el botón "Mi Mesa" |
 | POST | `/api/secret-photographer/upload` | No (rate limit) | Subir foto de reto + mensaje |
+| POST | `/api/secret-photographer/batch-download` | No | Descargar varias fotos de retos en ZIP (`Mesa-XX/…`, máx. 100 ids) |
 | GET | `/api/secret-photographer/challenge/{id}` | No | Detalle reto (blocked) |
 | GET | `/api/admin/dashboard` | Admin | Totales (fotos, usuarios, mesas, retos, carrusel) |
 | GET | `/api/admin/tables`, `POST/PUT/DELETE` | Admin | Gestión mesas |
@@ -664,6 +674,7 @@ Miniaturas/
 - Nombres de archivo con **UUID** para evitar colisiones
 - **Miniatura con caja máxima 150×150px** (aspect ratio preservado, `exif_transpose` aplicado)
 - **Paginación infinita** con offset/limit
+- **Descarga múltiple por selección** (galería, tab Galería del admin y dashboard de retos): modo selección → diálogo **ZIP único** (máx. 100 fotos; se arma en archivo temporal con `ZIP_STORED` y se borra tras enviarse) o **archivos individuales** (sin límite; el navegador puede pedir confirmación para descargas múltiples)
 - **15 subidas/minuto** por usuario (rate limit) — también en retos
 - Las fotos se sirven **a través de FastAPI** (sin autenticación para visualizar)
 - Mensaje opcional (150 caracteres) en galería **y** en fotos de retos
@@ -723,7 +734,7 @@ El **frontend** recibe `VITE_PROXY_TARGET` (target del proxy `/api` de Vite; en 
 | Aspecto | Decisión |
 |---|---|
 | Gestión de estado | React Context |
-| Cliente HTTP | `fetch` nativo + helpers `api()`/`apiUpload()` |
+| Cliente HTTP | `fetch` nativo + helpers `api()`/`apiUpload()`/`apiBlob()` |
 | Paginación | offset/limit |
 | Procesamiento de imágenes | Pillow (Python) |
 | OAuth | Authlib |

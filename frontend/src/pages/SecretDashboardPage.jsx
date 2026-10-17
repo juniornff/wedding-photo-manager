@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import PhotoLightbox from '../components/PhotoLightbox';
+import SelectionToolbar from '../components/SelectionToolbar';
+import DownloadDialog from '../components/DownloadDialog';
+import usePhotoSelection from '../hooks/usePhotoSelection';
 import { API_BASE, api } from '../api';
-import { photoSrc, authorName } from '../utils';
+import { photoSrc, photoUrl, authorName, downloadZip, downloadIndividuals } from '../utils';
 
 const CONFETTI_COLORS = ['#ffd700', '#e8a0b4', '#f5d6c6', '#c48b9d', '#f4a261', '#94d2bd'];
 
@@ -62,6 +65,11 @@ export default function SecretDashboardPage() {
   const [error, setError] = useState(null);
   const [confetti, setConfetti] = useState(false);
   const [lightbox, setLightbox] = useState(null);
+  const [showDialog, setShowDialog] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState(null);
+  const [downloadError, setDownloadError] = useState(null);
+  const selection = usePhotoSelection();
+  const { prune: pruneSelection } = selection;
 
   const prevIdsRef = useRef(new Set());
   const newIdsRef = useRef(new Set());
@@ -87,12 +95,13 @@ export default function SecretDashboardPage() {
 
       setDashboard(data);
       setError(null);
+      pruneSelection(current);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [pruneSelection]);
 
   useEffect(() => {
     const es = new EventSource(`${API_BASE}/api/events`);
@@ -111,10 +120,36 @@ export default function SecretDashboardPage() {
   }, [fetchDashboard]);
 
   const allChallenges = dashboard?.tables?.flatMap((t) => t.challenges ?? []) ?? [];
+  const allPhotos = allChallenges.flatMap((c) => c.photos ?? []);
   const lightboxPhotos = lightbox ? allChallenges.find((c) => c.id === lightbox.challengeId)?.photos ?? [] : [];
   const totalPhotos = dashboard?.tables?.reduce((acc, t) => acc + t.photo_count, 0) ?? 0;
   const totalMax = dashboard?.tables?.reduce((acc, t) => acc + t.max_photos, 0) ?? 0;
   const isComplete = (ch) => ch.max_photos > 0 && ch.photo_count >= ch.max_photos;
+
+  const handleEnterSelect = () => {
+    setLightbox(null);
+    selection.enter();
+  };
+
+  const handleDownload = async (mode) => {
+    const ids = [...selection.selectedIds];
+    setDownloadError(null);
+    setDownloadBusy(mode);
+    try {
+      if (mode === 'zip') {
+        await downloadZip(ids, '/api/secret-photographer/batch-download', 'fotos-retos.zip');
+      } else {
+        const urls = allPhotos.filter((p) => selection.selectedIds.has(p.id)).map((p) => photoUrl(p.path));
+        downloadIndividuals(urls).catch(() => {});
+      }
+      setShowDialog(false);
+      selection.exit();
+    } catch (err) {
+      setDownloadError(err.message);
+    } finally {
+      setDownloadBusy(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -161,6 +196,21 @@ export default function SecretDashboardPage() {
           <span className="text-gray-500">fotos subidas</span>
         </div>
       </div>
+
+      {totalPhotos > 0 && (
+        <SelectionToolbar
+          selectMode={selection.selectMode}
+          count={selection.count}
+          onEnter={handleEnterSelect}
+          onExit={selection.exit}
+          onSelectAll={() => selection.selectAll(allPhotos.map((p) => p.id))}
+          onClear={selection.clear}
+          onDownload={() => {
+            setDownloadError(null);
+            setShowDialog(true);
+          }}
+        />
+      )}
 
       {dashboard?.winner_table_name && (
         <div className="winner-pop mb-8 rounded-2xl bg-gradient-to-r from-yellow-100 via-amber-100 to-yellow-100 border-2 border-yellow-400 p-5 text-center shadow-md">
@@ -228,11 +278,13 @@ export default function SecretDashboardPage() {
 
                         {challenge.photos.length > 0 && (
                           <div className="mt-2 grid grid-cols-3 sm:grid-cols-4 gap-2">
-                            {challenge.photos.map((photo, i) => (
+                            {challenge.photos.map((photo, i) => {
+                              const isSelected = selection.selectMode && selection.selectedIds.has(photo.id);
+                              return (
                               <button
                                 key={photo.id}
-                                onClick={() => setLightbox({ challengeId: challenge.id, index: i })}
-                                className={`relative group cursor-pointer ${newIdsRef.current.has(photo.id) ? 'photo-enter' : ''}`}
+                                onClick={() => (selection.selectMode ? selection.toggle(photo.id) : setLightbox({ challengeId: challenge.id, index: i }))}
+                                className={`relative group cursor-pointer rounded-lg ${newIdsRef.current.has(photo.id) ? 'photo-enter' : ''} ${isSelected ? 'ring-2 ring-[var(--color-primary)]' : ''}`}
                               >
                                 <img
                                   src={photoSrc(photo)}
@@ -241,8 +293,20 @@ export default function SecretDashboardPage() {
                                   loading="lazy"
                                 />
                                 {authorChip(photo)}
+                                {selection.selectMode && (
+                                  <span
+                                    className={`absolute top-1 right-1 w-5 h-5 rounded-full border-2 flex items-center justify-center text-white text-[10px] ${
+                                      isSelected
+                                        ? 'bg-[var(--color-primary)] border-[var(--color-primary)]'
+                                        : 'bg-black/30 border-white'
+                                    }`}
+                                  >
+                                    {isSelected ? '✓' : ''}
+                                  </span>
+                                )}
                               </button>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -255,12 +319,25 @@ export default function SecretDashboardPage() {
         </div>
       )}
 
-      {lightbox && (
+      {lightbox && !selection.selectMode && (
         <PhotoLightbox
           photos={lightboxPhotos}
           index={lightbox.index}
           onClose={() => setLightbox(null)}
           onNavigate={(i) => setLightbox({ challengeId: lightbox.challengeId, index: i })}
+        />
+      )}
+
+      {showDialog && (
+        <DownloadDialog
+          count={selection.count}
+          busy={downloadBusy}
+          error={downloadError}
+          onZip={() => handleDownload('zip')}
+          onIndividual={() => handleDownload('individual')}
+          onClose={() => {
+            if (!downloadBusy) setShowDialog(false);
+          }}
         />
       )}
     </div>
