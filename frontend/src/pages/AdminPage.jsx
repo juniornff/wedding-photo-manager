@@ -740,6 +740,8 @@ function GalleryTab() {
           count={selection.count}
           busy={downloadBusy}
           error={downloadError}
+          drive={{ photoIds: [...selection.selectedIds], kind: 'gallery' }}
+          onDriveComplete={selection.exit}
           onZip={() => handleDownload('zip')}
           onIndividual={() => handleDownload('individual')}
           onClose={() => {

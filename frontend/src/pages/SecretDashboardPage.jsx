@@ -342,6 +342,8 @@ export default function SecretDashboardPage() {
           count={selection.count}
           busy={downloadBusy}
           error={downloadError}
+          drive={{ photoIds: [...selection.selectedIds], kind: 'challenge' }}
+          onDriveComplete={selection.exit}
           onZip={() => handleDownload('zip')}
           onIndividual={() => handleDownload('individual')}
           onClose={() => {
