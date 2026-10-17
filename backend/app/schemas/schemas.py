@@ -274,13 +274,24 @@ class DriveStatusResponse(BaseModel):
     drive_ready: bool
 
 
-class DriveSaveRequest(BaseModel):
+class DriveBatchSaveRequest(BaseModel):
     user_id: int
-    photo_id: int
+    photo_ids: list[int] = Field(..., min_length=1, max_length=100)
     kind: Literal["gallery", "challenge"]
 
 
-class DriveSaveResponse(BaseModel):
-    status: Literal["uploaded", "skipped"]
-    file_name: str
-    folder_id: str
+class DriveBatchStartResponse(BaseModel):
+    job_id: str
+    total: int
+
+
+class DriveJobResponse(BaseModel):
+    job_id: str
+    status: Literal["running", "done"]
+    total: int
+    done: int
+    uploaded: int
+    skipped: int
+    failed: int
+    needs_auth: bool
+    folder_id: Optional[str] = None

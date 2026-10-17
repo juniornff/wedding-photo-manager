@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import mimetypes
@@ -13,7 +14,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models.models import ChallengePhoto, GalleryPhoto, User, WeddingInfo
+from app.database import SessionLocal
+from app.models.models import User, WeddingInfo
 
 logger = logging.getLogger(__name__)
 
@@ -22,20 +24,23 @@ DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files"
 DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files"
 FOLDER_MIME = "application/vnd.google-apps.folder"
 
+JOB_TTL_SECONDS = 7200
+
 # access_token cache: {user_id: (token, expires_at)}
 _access_tokens: dict[int, tuple[str, float]] = {}
 _drive_timestamps: dict[int, list[float]] = defaultdict(list)
+_jobs: dict[str, dict] = {}
 
 
-def check_drive_rate_limit(user_id: int) -> None:
+def check_drive_rate_limit(user_id: int, cost: int = 1) -> None:
     now = time.time()
     timestamps = [t for t in _drive_timestamps[user_id] if t > now - 60]
-    if len(timestamps) >= settings.DRIVE_RATE_LIMIT_PER_MINUTE:
+    if len(timestamps) + cost > settings.DRIVE_RATE_LIMIT_PER_MINUTE:
         raise HTTPException(
             status_code=429,
             detail=f"Límite de {settings.DRIVE_RATE_LIMIT_PER_MINUTE} envíos a Drive por minuto alcanzado.",
         )
-    timestamps.append(now)
+    timestamps.extend([now] * cost)
     _drive_timestamps[user_id] = timestamps
 
 
@@ -47,7 +52,7 @@ def _raise_for_drive(res: httpx.Response) -> None:
     if res.status_code < 400:
         return
     if res.status_code == 401:
-        # refresh_token revocado o caducado
+        # access token revocado/caducado o el usuario retiró el permiso
         raise HTTPException(status_code=401, detail="drive_reconnect")
     logger.warning("Drive API error %s: %s", res.status_code, res.text[:500])
     raise HTTPException(status_code=502, detail="drive_error")
@@ -192,46 +197,115 @@ async def _upload_file(
     _raise_for_drive(res)
 
 
-async def save_to_drive(
-    db: AsyncSession, user: User, kind: str, photo_id: int
+def _prune_jobs() -> None:
+    cutoff = time.time() - JOB_TTL_SECONDS
+    for job_id in [jid for jid, job in _jobs.items() if job.get("finished_at") and job["finished_at"] < cutoff]:
+        del _jobs[job_id]
+
+
+def get_drive_job(job_id: str) -> dict | None:
+    return _jobs.get(job_id)
+
+
+def start_drive_batch(
+    user_id: int, root_name: str, photos: list[tuple[int, str]], kind: str
 ) -> dict:
-    check_drive_rate_limit(user.id)
+    _prune_jobs()
+    job = {
+        "id": uuid.uuid4().hex,
+        "user_id": user_id,
+        "total": len(photos),
+        "done": 0,
+        "uploaded": 0,
+        "skipped": 0,
+        "failed": 0,
+        "needs_auth": False,
+        "folder_id": None,
+        "status": "running",
+        "finished_at": None,
+    }
+    _jobs[job["id"]] = job
+    asyncio.create_task(_run_drive_batch(job, root_name, photos, kind))
+    return job
 
+
+def _folder_parts(root_name: str, path: str, kind: str) -> tuple[str, ...]:
     if kind == "gallery":
-        result = await db.execute(select(GalleryPhoto).where(GalleryPhoto.id == photo_id))
-    else:
-        result = await db.execute(select(ChallengePhoto).where(ChallengePhoto.id == photo_id))
-    photo = result.scalar_one_or_none()
-    if not photo:
-        raise HTTPException(status_code=404, detail="Foto no encontrada.")
+        return (root_name,)
+    # Retos: replica la estructura de disco (Fotografo-Secreto/Mesa-XX).
+    return (root_name, *Path(path).parent.parts)
 
-    abs_path = os.path.join(settings.UPLOAD_DIR, photo.path)
-    if not os.path.exists(abs_path):
-        raise HTTPException(status_code=404, detail="Archivo no encontrado en el servidor.")
 
-    root_name = await get_root_folder_name(db)
-    folder_parts = [root_name]
-    if kind == "challenge":
-        folder_parts.extend(Path(photo.path).parent.parts)
-
-    name = os.path.basename(photo.path)
-    token = await _refresh_access_token(user, db)
-
+async def _run_drive_batch(
+    job: dict, root_name: str, photos: list[tuple[int, str]], kind: str
+) -> None:
+    user_id = job["user_id"]
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            folder_id = await ensure_folder_path(client, token, folder_parts)
-            existing = await _list_file_names(client, token, folder_id)
-            if name in existing:
-                return {"status": "skipped", "file_name": name, "folder_id": folder_id}
-            await _upload_file(client, token, folder_id, abs_path, name)
-    except httpx.HTTPError:
-        logger.warning("Error de red al subir a Drive", exc_info=True)
-        raise HTTPException(status_code=502, detail="drive_error")
+        async with SessionLocal() as db:
+            user = await db.get(User, user_id)
+            if not user or not user.google_refresh_token or not user.google_id:
+                job["needs_auth"] = True
+                job["failed"] = job["total"]
+                job["done"] = job["total"]
+                return
+            token = await _refresh_access_token(user, db)
+
+            async with httpx.AsyncClient(timeout=30) as client:
+                groups: dict[tuple[str, ...], list[tuple[int, str]]] = defaultdict(list)
+                for photo_id, path in photos:
+                    groups[_folder_parts(root_name, path, kind)].append((photo_id, path))
+
+                semaphore = asyncio.Semaphore(settings.DRIVE_UPLOAD_CONCURRENCY)
+
+                async def upload_one(path: str, folder_id: str, names: set[str]) -> None:
+                    async with semaphore:
+                        if job["needs_auth"]:
+                            job["failed"] += 1
+                            job["done"] += 1
+                            return
+                        name = os.path.basename(path)
+                        abs_path = os.path.join(settings.UPLOAD_DIR, path)
+                        try:
+                            if name in names:
+                                job["skipped"] += 1
+                            elif not os.path.exists(abs_path):
+                                job["failed"] += 1
+                            else:
+                                await _upload_file(client, token, folder_id, abs_path, name)
+                                names.add(name)
+                                job["uploaded"] += 1
+                        except HTTPException as exc:
+                            if exc.status_code == 401:
+                                job["needs_auth"] = True
+                                _access_tokens.pop(user_id, None)
+                            job["failed"] += 1
+                        except (httpx.HTTPError, OSError):
+                            logger.warning("Fallo al subir %s a Drive", path, exc_info=True)
+                            job["failed"] += 1
+                        finally:
+                            job["done"] += 1
+
+                for parts, items in groups.items():
+                    if job["needs_auth"]:
+                        job["failed"] += len(items)
+                        job["done"] += len(items)
+                        continue
+                    folder_id = await ensure_folder_path(client, token, list(parts))
+                    if job["folder_id"] is None:
+                        job["folder_id"] = folder_id
+                    names = await _list_file_names(client, token, folder_id)
+                    await asyncio.gather(*(upload_one(path, folder_id, names) for _, path in items))
     except HTTPException as exc:
         if exc.status_code == 401:
-            # El access token cacheado ya no sirve (p.ej. el usuario revocó el acceso):
-            # se evita reutilizarlo tras una reautorización.
-            _access_tokens.pop(user.id, None)
-        raise
-
-    return {"status": "uploaded", "file_name": name, "folder_id": folder_id}
+            job["needs_auth"] = True
+            _access_tokens.pop(user_id, None)
+        job["failed"] += job["total"] - job["done"]
+        job["done"] = job["total"]
+        logger.warning("Lote de Drive abortado: %s", exc.detail)
+    except Exception:
+        logger.warning("Lote de Drive falló inesperadamente", exc_info=True)
+        job["failed"] += job["total"] - job["done"]
+        job["done"] = job["total"]
+    finally:
+        job["status"] = "done"
+        job["finished_at"] = time.time()

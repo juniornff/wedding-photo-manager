@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE: int = 25
     RATE_LIMIT_PER_MINUTE: int = 15
     DRIVE_RATE_LIMIT_PER_MINUTE: int = 60
+    DRIVE_UPLOAD_CONCURRENCY: int = 4
     ORPHAN_CLEANUP_INTERVAL: int = 10
 
     model_config = {

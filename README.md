@@ -464,7 +464,8 @@ classDiagram
 
     class DriveRouter {
         +drive_status()
-        +drive_save()
+        +drive_save_batch()
+        +drive_job()
     }
 
     class DriveService {
@@ -473,7 +474,7 @@ classDiagram
         +ensure_folder_path()
         +list_file_names()
         +upload_file()
-        +save_to_drive()
+        +start_drive_batch()
     }
 
     class PhotoService {
@@ -652,7 +653,8 @@ Miniaturas/
 | POST | `/api/guest`, `GET /api/guest/me` | No | Alta/consulta de invitado anónimo |
 | GET | `/api/google`, `/api/google/callback` | No | OAuth Google (`?user_id=X` vincula, `&drive=1` pide consentimiento incremental `drive.file` + refresh token) |
 | GET | `/api/drive/status?user_id=X` | No | `{google_linked, drive_ready}` para mostrar/ocultar la opción Drive |
-| POST | `/api/drive/save` | No (rate limit) | Guardar una foto seleccionada en el Drive del usuario (`{user_id, photo_id, kind}`); dedupe por nombre, respuesta `uploaded`/`skipped` |
+| POST | `/api/drive/save-batch` | No (rate limit) | Inicia el guardado en segundo plano de hasta 100 fotos (`{user_id, photo_ids, kind}`); responde `{job_id, total}` |
+| GET | `/api/drive/job/{job_id}?user_id=X` | No | Estado del lote (`uploaded/skipped/failed/needs_auth/folder_id`); el frontend lo sondea y avisa al terminar con toasts |
 | POST | `/api/admin/login`, `/api/logout` | — | Sesión admin |
 | GET | `/api/admin/me` | Admin | Sesión/identidad del admin |
 | GET | `/api/events` | No | SSE |
@@ -694,7 +696,7 @@ Miniaturas/
 - **Miniatura con caja máxima 150×150px** (aspect ratio preservado, `exif_transpose` aplicado)
 - **Paginación infinita** con offset/limit
 - **Descarga múltiple por selección** (galería, tab Galería del admin y dashboard de retos): el modo se activa **manteniendo presionada** una foto (queda seleccionada) y se desactiva al quedarse sin selección → diálogo **ZIP único** (máx. 100 fotos; se arma en archivo temporal con `ZIP_STORED` y se borra tras enviarse) o **archivos individuales** (sin límite; el navegador puede pedir confirmación para descargas múltiples)
-- **Guardar en Google Drive** (opcional, en el mismo diálogo de selección): solo para usuarios con Google vinculado; la primera vez pide consentimiento incremental **`drive.file`** (`/api/google?user_id=X&drive=1`, `access_type=offline` + `prompt=consent`) y guarda el **refresh token** en `users.google_refresh_token`. El backend sube cada foto seleccionada a la carpeta `Fotos Boda {novio1} y {novio2}` (galería) o a `Fotografo-Secreto/Mesa-XX` (retos, replica la estructura de disco), **omite duplicados** por nombre de archivo y usa un rate limit propio (`DRIVE_RATE_LIMIT_PER_MINUTE`, 60/min). Si Google invalida el token, se limpia en BD y el frontend ofrece **reautorizar**. El scope `drive.file` es **no sensible**: no requiere verificación de Google, pero la OAuth consent screen debe estar **"En producción"** (en "Prueba" los refresh tokens caducan a los 7 días)
+- **Guardar en Google Drive** (opcional, en el mismo diálogo de selección): solo para usuarios con Google vinculado; la primera vez pide consentimiento incremental **`drive.file`** (`/api/google?user_id=X&drive=1`, `access_type=offline` + `prompt=consent`) y guarda el **refresh token** en `users.google_refresh_token`. El backend sube las fotos seleccionadas a la carpeta `Fotos Boda {novio1} y {novio2}` (galería) o a `Fotografo-Secreto/Mesa-XX` (retos, replica la estructura de disco), **omite duplicados** por nombre de archivo y usa un rate limit propio (`DRIVE_RATE_LIMIT_PER_MINUTE`, 60/min). El guardado corre **en segundo plano** (`POST /api/drive/save-batch` inicia un job que sube en paralelo con `DRIVE_UPLOAD_CONCURRENCY`; el frontend sondea `GET /api/drive/job/{job_id}` y avisa con **toasts** al terminar, aunque el usuario cierre el diálogo; los jobs se persisten en `localStorage` y se reanuda el sondeo al recargar). Si Google invalida el token, se limpia en BD y el toast ofrece **reautorizar**. El scope `drive.file` es **no sensible**: no requiere verificación de Google, pero la OAuth consent screen debe estar **"En producción"** (en "Prueba" los refresh tokens caducan a los 7 días)
 - **15 subidas/minuto** por usuario (rate limit) — también en retos
 - Las fotos se sirven **a través de FastAPI** (sin autenticación para visualizar)
 - Mensaje opcional (150 caracteres) en galería **y** en fotos de retos
@@ -730,7 +732,7 @@ El archivo `.env` de la raíz (no versionado) es la **única fuente de configura
 
 `is_admin_email()` acepta `ADMIN_EMAIL`, `NOVIO_EMAIL` y `NOVIA_EMAIL`; `get_admin_password(email)` devuelve la password de cada uno (fallback a `ADMIN_PASSWORD`). Además, un usuario con `role='admin'` en la tabla `users` es admin aunque su email no esté en el `.env` (los 3 del `.env` se reafirman como admin en cada arranque).
 
-Opcionales (defaults en `Settings`): `ORPHAN_CLEANUP_INTERVAL=10`, `FRONTEND_URL=http://localhost:5173`, `CORS_ALLOWED_ORIGINS=` (CSV de orígenes extra para CORS, p.ej. `http://10.0.0.4:5173` en LAN), `MAX_UPLOAD_SIZE=25`, `RATE_LIMIT_PER_MINUTE=15`, `DRIVE_RATE_LIMIT_PER_MINUTE=60`, `DATABASE_URL`, `UPLOAD_DIR=Fotos`, `THUMBNAILS_DIR=Miniaturas`.
+Opcionales (defaults en `Settings`): `ORPHAN_CLEANUP_INTERVAL=10`, `FRONTEND_URL=http://localhost:5173`, `CORS_ALLOWED_ORIGINS=` (CSV de orígenes extra para CORS, p.ej. `http://10.0.0.4:5173` en LAN), `MAX_UPLOAD_SIZE=25`, `RATE_LIMIT_PER_MINUTE=15`, `DRIVE_RATE_LIMIT_PER_MINUTE=60`, `DRIVE_UPLOAD_CONCURRENCY=4`, `DATABASE_URL`, `UPLOAD_DIR=Fotos`, `THUMBNAILS_DIR=Miniaturas`.
 
 El **frontend** recibe `VITE_PROXY_TARGET` (target del proxy `/api` de Vite; en Docker `http://backend:8000`, por defecto en dev local `http://localhost:8000`). No hay `.env` de frontend: la API es relativa (`import.meta.env.VITE_API_URL || ''`).
 

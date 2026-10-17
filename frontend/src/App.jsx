@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthProvider';
 import { SSEProvider } from './context/SSEProvider';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import Toaster from './components/Toaster';
 import ScrollToTop from './components/ScrollToTop';
 import MainPage from './pages/MainPage';
 import FotografoSecretoPage from './pages/FotografoSecretoPage';
@@ -43,6 +44,7 @@ export default function App() {
             <Route path="*" element={<NotFound />} />
           </Routes>
           <Footer />
+          <Toaster />
         </SSEProvider>
       </AuthProvider>
     </BrowserRouter>
