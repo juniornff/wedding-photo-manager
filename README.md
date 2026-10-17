@@ -119,6 +119,7 @@ erDiagram
         string novio1_name
         string novio2_name
         date wedding_date
+        string message
         string color_scheme
         int carousel_interval
         int winner_table_id FK
@@ -427,6 +428,7 @@ classDiagram
     class SecretPhotographerRouter {
         +get_dashboard()
         +get_table_by_qr()
+        +get_my_table()
         +get_challenge()
         +upload_challenge_photo()
     }
@@ -438,11 +440,12 @@ classDiagram
         +manage_gallery()
         +manage_tables()
         +manage_challenges()
+        +unlock_challenge()
         +list_challenge_photos()
         +delete_challenge_photo()
+        +manage_users()
         +select_winner()
         +clear_winner()
-        +get_table_qr()
     }
 
     class AuthRouter {
@@ -474,6 +477,13 @@ classDiagram
         +broadcast(event, data)
     }
 
+    class Serializers {
+        +wedding_info_response()
+        +challenge_photo_response()
+        +counts_by_challenge()
+        +counts_by_table()
+    }
+
     FastAPIApp --> MainRouter
     FastAPIApp --> SecretPhotographerRouter
     FastAPIApp --> AdminRouter
@@ -485,6 +495,10 @@ classDiagram
     AdminRouter --> PhotoService
     AuthRouter --> AuthService
 
+    MainRouter --> Serializers
+    SecretPhotographerRouter --> Serializers
+    AdminRouter --> Serializers
+
     MainRouter --> SSEManager
     SecretPhotographerRouter --> SSEManager
     AdminRouter --> SSEManager
@@ -495,9 +509,9 @@ classDiagram
 | Evento | Emisor | Payload |
 |---|---|---|
 | `new_photo` | `POST /api/gallery/upload` | `{ photo_id }` |
-| `gallery_photo_deleted` | `DELETE /api/admin/gallery/{id}` | `{ photo_id }` |
+| `gallery_photo_deleted` | `DELETE /api/admin/gallery/{id}` (también al borrar usuario con `delete_photos=true`) | `{ photo_id }` |
 | `new_challenge_photo` | `POST /api/secret-photographer/upload` | `{ photo_id, challenge_id, table_id }` |
-| `challenge_photo_deleted` | `DELETE /api/admin/challenges/{cid}/photos/{pid}` | `{ photo_id, challenge_id }` |
+| `challenge_photo_deleted` | `DELETE /api/admin/challenges/{cid}/photos/{pid}` (también al borrar usuario con `delete_photos=true`) | `{ photo_id, challenge_id }` |
 | `carousel_updated` | Admin carrusel (upload/delete/reorder) | `{}` |
 | `info_updated` | `PUT /api/admin/wedding-info` | `{ novios, fecha, colores, ... }` |
 | `winner_selected` | Admin seleccionar/quitar ganador | `{ table_id }` o `{ table_id: null }` |
@@ -608,26 +622,32 @@ Miniaturas/
 | GET | `/api/gallery` | No | Galería (paginación offset/limit) |
 | POST | `/api/gallery/upload` | No (rate limit) | Subir foto + mensaje |
 | GET | `/api/gallery/{id}/download` | No | Descargar una foto |
-| POST | `/api/gallery/batch-download` | No | Descargar varias |
-| GET | `/api/guest`, `/api/guest/me` | No | Alta/consulta de invitado anónimo |
+| POST | `/api/gallery/batch-download` | No | Descargar varias (máx. 100 ids) |
+| POST | `/api/guest`, `GET /api/guest/me` | No | Alta/consulta de invitado anónimo |
 | GET | `/api/google`, `/api/google/callback` | No | OAuth Google |
 | POST | `/api/admin/login`, `/api/logout` | — | Sesión admin |
+| GET | `/api/admin/me` | Admin | Sesión/identidad del admin |
 | GET | `/api/events` | No | SSE |
 | GET | `/api/secret-photographer/dashboard` | No | Tablero público en vivo |
 | GET | `/api/secret-photographer/table/{qr}` | No | Mesa + retos + my_photo |
 | GET | `/api/secret-photographer/my-table?user_id=X` | No | Mesa del usuario (`{id,name,qr_code}` o `null`); para el botón "Mi Mesa" |
 | POST | `/api/secret-photographer/upload` | No (rate limit) | Subir foto de reto + mensaje |
 | GET | `/api/secret-photographer/challenge/{id}` | No | Detalle reto (blocked) |
+| GET | `/api/admin/dashboard` | Admin | Totales (fotos, usuarios, mesas, retos, carrusel) |
 | GET | `/api/admin/tables`, `POST/PUT/DELETE` | Admin | Gestión mesas |
 | GET | `/api/admin/tables/{id}/photos` | Admin | Fotos por mesa (vista ganador) |
-| GET | `/api/admin/tables/{id}/qr` | Admin | Descargar QR |
 | GET/POST/PUT/DELETE | `/api/admin/challenges` | Admin | Gestión retos |
+| PUT | `/api/admin/challenges/{id}/unlock` | Admin | Desbloquear reto completo para editar/eliminar |
 | GET | `/api/admin/challenges/{id}/photos` | Admin | Fotos de un reto |
 | DELETE | `/api/admin/challenges/{id}/photos/{pid}` | Admin | Borrar foto de reto |
 | POST/DELETE | `/api/admin/select-winner` | Admin | Elegir/quitar ganador |
-| GET/POST/DELETE | `/api/admin/carousel`, `/gallery` | Admin | Gestión carrusel/galería |
+| GET/POST/DELETE | `/api/admin/carousel` | Admin | Gestión carrusel |
+| PUT | `/api/admin/carousel/reorder` | Admin | Reordenar carrusel |
+| DELETE | `/api/admin/gallery/{id}` | Admin | Borrar foto de galería |
 | PUT | `/api/admin/wedding-info` | Admin | Editar info boda/colores |
 | GET | `/api/admin/users` | Admin | Listar usuarios (alias o nombre Google, rol Admin/Invitado, email, Google vinculado, mesa, fotos, fecha) |
+| POST | `/api/admin/users` | Admin | Pre-crear usuario por email + rol (entra con Google) |
+| PATCH | `/api/admin/users/{id}/role` | Admin | Cambiar rol admin/invitado |
 | PUT | `/api/admin/users/{id}` | Admin | Renombrar alias |
 | PATCH | `/api/admin/users/{id}/table` | Admin | Asignar/quitar mesa |
 | DELETE | `/api/admin/users/{id}?delete_photos=false` | Admin | Borrar usuario; `false` anonimiza sus fotos (galería+retos), `true` las elimina con sus archivos |
@@ -642,7 +662,7 @@ Miniaturas/
 - **Avatares de Google** (`lh3.googleusercontent.com`): responden **429** cuando el `Referer` de la petición es un origen HTTP inseguro (localhost/IP LAN). La app fija `<meta name="referrer" content="no-referrer">` en `index.html` para que las imágenes de perfil carguen en dev/LAN (y de igual forma en producción)
 - Solo imágenes (validación por **MIME type real** inspeccionando bytes + extensión) — **todos los formatos** (HEIC/HEIF de iPhone incluidos: se convierten a JPEG al subir con `exif_transpose`, el original no se guarda), máx **25 MB**
 - Nombres de archivo con **UUID** para evitar colisiones
-- **Miniatura 150×150px** manteniendo aspect ratio
+- **Miniatura con caja máxima 150×150px** (aspect ratio preservado, `exif_transpose` aplicado)
 - **Paginación infinita** con offset/limit
 - **15 subidas/minuto** por usuario (rate limit) — también en retos
 - Las fotos se sirven **a través de FastAPI** (sin autenticación para visualizar)
@@ -679,7 +699,9 @@ El archivo `.env` de la raíz (no versionado) es la **única fuente de configura
 
 `is_admin_email()` acepta `ADMIN_EMAIL`, `NOVIO_EMAIL` y `NOVIA_EMAIL`; `get_admin_password(email)` devuelve la password de cada uno (fallback a `ADMIN_PASSWORD`). Además, un usuario con `role='admin'` en la tabla `users` es admin aunque su email no esté en el `.env` (los 3 del `.env` se reafirman como admin en cada arranque).
 
-Opcionales (defaults en `Settings`): `ORPHAN_CLEANUP_INTERVAL=10`, `FRONTEND_URL=http://localhost:5173`, `CORS_ALLOWED_ORIGINS=` (CSV de orígenes extra para CORS, p.ej. `http://10.0.0.4:5173` en LAN), `MAX_UPLOAD_SIZE=25`, `RATE_LIMIT_PER_MINUTE=15`, `HOST=0.0.0.0`, `PORT=8000`, `DATABASE_URL`, `UPLOAD_DIR=Fotos`, `THUMBNAILS_DIR=Miniaturas`.
+Opcionales (defaults en `Settings`): `ORPHAN_CLEANUP_INTERVAL=10`, `FRONTEND_URL=http://localhost:5173`, `CORS_ALLOWED_ORIGINS=` (CSV de orígenes extra para CORS, p.ej. `http://10.0.0.4:5173` en LAN), `MAX_UPLOAD_SIZE=25`, `RATE_LIMIT_PER_MINUTE=15`, `DATABASE_URL`, `UPLOAD_DIR=Fotos`, `THUMBNAILS_DIR=Miniaturas`.
+
+El **frontend** recibe `VITE_PROXY_TARGET` (target del proxy `/api` de Vite; en Docker `http://backend:8000`, por defecto en dev local `http://localhost:8000`). No hay `.env` de frontend: la API es relativa (`import.meta.env.VITE_API_URL || ''`).
 
 > **Google OAuth**: el `redirect_uri` se construye desde `FRONTEND_URL` (única), y **Google solo acepta `localhost` o dominios públicos** — una IP privada (p.ej. `10.0.0.4`) no se puede registrar en la consola. Por eso en LAN `FRONTEND_URL=http://localhost:5173` y los dispositivos móviles que entran por IP dependen de `CORS_ALLOWED_ORIGINS` para la API (el login con Google desde el móvil solo funciona por dominio público). Tras el login, el backend redirige a `FRONTEND_URL/?google_user={id}` y el frontend recupera la identidad.
 
@@ -689,9 +711,9 @@ Opcionales (defaults en `Settings`): `ORPHAN_CLEANUP_INTERVAL=10`, `FRONTEND_URL
 
 - `docker compose up --build` levanta backend y frontend (**LAN/dev**). El frontend usa **API relativa**: Vite proxya `/api/*` al backend `http://backend:8000` (env `VITE_PROXY_TARGET`), por lo que la misma web funciona en `localhost` y en cualquier IP/Máquina de la red (`FRONTEND_URL` controla CORS y redirects OAuth).
 - Host LAN: backend publicado en **`localhost:8001`** (→ contenedor `:8000`), frontend en `0.0.0.0:5173` (accesible desde otros dispositivos vía `http://<IP>:5173`). Vite acepta cualquier Host (`allowedHosts`).
-- Para **producción** (Caddy + Cloudflare): usar `docker compose -f docker-compose.prod.yml up -d --build` — sin puertos de host, frontend y backend en la red externa `proxy-net` para que Caddy los alcance. Bloque de Caddy en `Caddyfile.md`.
+- Para **producción** (Caddy + Cloudflare): en el servidor el compose prod está desplegado con el nombre `docker-compose.yml` → `docker compose up -d --build`; el archivo del repo `docker-compose.prod.yml` se renombra allí (el rsync de `DEPLOY.md` lo excluye para no pisarlo). Sin puertos de host, frontend y backend en la red externa `proxy-net` para que Caddy los alcance. Bloque de Caddy en `Caddyfile.md`; guía de actualización en `DEPLOY.md`.
 - **Páginas legales OAuth** (`/privacidad` y `/terminos`, públicas y con los nombres de los novios vía `GET /api/wedding-info`): Google las exige (Política de Privacidad y Condiciones, enlazadas desde la homepage) en el OAuth consent screen de apps que usan OAuth. Registrar en la consola de Google las URLs `https://boda.nehemiasfeliz.com/privacidad` y `.../terminos`
-- Para correr el backend local fuera de Docker: `uvicorn app.main:app --reload` desde `backend/` (lee el `.env` raíz).
+- Para correr el backend local fuera de Docker: `uvicorn app.main:app --reload --app-dir backend` desde la raíz del repo (el `.env` raíz se lee por ruta absoluta; `Fotos/`, `Miniaturas/` y `data/` se crean relativos al CWD).
 - Dev frontend: `npm run dev` en `frontend/` (Vite proxya `/api` → `VITE_PROXY_TARGET` o `http://localhost:8000` por defecto).
 
 ---

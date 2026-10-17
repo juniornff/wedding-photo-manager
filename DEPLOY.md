@@ -34,14 +34,18 @@ Desde la raíz del repo:
 rsync -av --exclude 'data/' --exclude 'Fotos/' --exclude 'Miniaturas/' \
   --exclude 'node_modules/' --exclude '__pycache__/' --exclude 'dist/' \
   --exclude '*.pyc' --exclude '*.db*' --exclude '.git' \
+  --exclude 'docker-compose*.yml' --exclude '.env' \
   ./ usuario@servidor:~/Applications/wedding-photo-manager/
 ```
 
 - **Nunca se copian `data/`, `Fotos/` ni `Miniaturas/`: la instancia de producción
   mantiene su propia base de datos y fotos.**
-- `.env` **no se sobreescribe** salvo que lo incluyas explícitamente (rsync lo
-  copia por defecto). Para no tocarlo: añade `--exclude '.env'`. Si cambias
-  secretos o variables, edítalos a mano en el servidor (sección 3).
+- **`--exclude 'docker-compose*.yml'` es obligatorio**: en el servidor el compose
+  prod está renombrado a `docker-compose.yml` y el rsync del repo (que trae
+  `docker-compose.yml` de dev y `docker-compose.prod.yml`) lo pisaría con el de
+  desarrollo.
+- `.env` se excluye para no sobreescribirlo; si cambias secretos o variables,
+  edítalos a mano en el servidor (sección 3).
 
 ---
 
@@ -119,6 +123,7 @@ Si algo falla:
   `proxy-net` con Caddy, el DNS `boda.nehemiasfeliz.com` → servidor (Cloudflare) y
   el OAuth de Google con el redirect URI `https://boda.nehemiasfeliz.com/api/google/callback`.
 - Cloudflare en modo proxy bufferear el SSE: el frontend reconecta solo.
-- `docker compose` sin `-f`: en el servidor **no debe existir** el compose de dev
-  (recién desplegado, el `docker-compose.prod.yml` fue renombrado a
-  `docker-compose.yml`). Si reinstalas el repo completo, vuelve a hacer ese rename.
+- `docker compose` sin `-f`: en el servidor el compose de producción está
+  renombrado a `docker-compose.yml` (el rsync de la sección 2 lo excluye, así que
+  no se pisa). Solo si copias el repo completo por otra vía (git, tar) hay que
+  volver a hacer ese rename.

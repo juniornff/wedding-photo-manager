@@ -5,14 +5,14 @@ Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. 
 
 ## Commands
 - **Run stack:** `docker compose up` — mounts root `Fotos/`, `Miniaturas/` and `data/` into the backend container. Use `docker compose up -d --build` after changing `.env` (no need to rebuild for `.env` changes: Compose injects env vars at container start)
-- **Backend local:** `uvicorn app.main:app --reload` from `backend/` — run from repo root so `config.py` finds root `.env`
+- **Backend local:** `uvicorn app.main:app --reload --app-dir backend` desde la raíz del repo (`config.py` lee el `.env` raíz por ruta absoluta; `Fotos/`, `Miniaturas/` y `data/` son relativos al CWD, así que correr desde `backend/` crearía dirs ahí)
 - **Frontend dev:** `npm run dev` from `frontend/` — Vite proxies `/api` → `VITE_PROXY_TARGET` (default `http://localhost:8000`)
 - **Frontend lint:** `npm run lint` (oxlint, config in `.oxlintrc.json` — not ESLint). No typecheck script
-- **Prod deploy:** `docker compose -f docker-compose.prod.yml up -d --build` on the home server (Caddy block in `Caddyfile.md`)
-- **Testing:** none yet. `backend/requirements-test.txt` is vestigial; no pytest/vitest suites, no `test` scripts
+- **Prod deploy:** `docker compose up -d --build` on the home server (there `docker-compose.prod.yml` del repo está desplegado con el nombre `docker-compose.yml`; ver `DEPLOY.md`). Caddy block in `Caddyfile.md`
+- **Testing:** none yet. No pytest/vitest suites, no `test` scripts
 
 ## Tech stack
-- **Backend:** FastAPI + SQLAlchemy (async) + SQLite (WAL) + pydantic-settings; libs Pillow (150×150 thumbnails) + pillow-heif (HEIC→JPEG), Authlib (Google OAuth), qrcode (table QRs)
+- **Backend:** FastAPI + SQLAlchemy (async) + SQLite (WAL) + pydantic-settings; libs Pillow (miniaturas caja 150×150) + pillow-heif (HEIC→JPEG), Authlib (Google OAuth), qrcode (table QRs)
 - **Frontend:** React 19 + Vite + Tailwind v4 + React Router; native `fetch` + React Context (no axios/Redux); SSE client
 - **Storage:** local filesystem `Fotos/` + `Miniaturas/` (mirrored structure); SQLite at `data/wedding.db` (path relative to CWD; `/app/data` in container)
 - **Auth:** Google OAuth (admin session cookie + guest identity recovery); anonymous guests via server-generated UUID stored in localStorage
@@ -32,9 +32,9 @@ Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. 
 
 ## Backend layout & quirks
 - Routers under `app/routers/`: `main`, `auth`, `fotografo_secreto`, `admin`, `sse` — all mounted in `app/main.py`
-- Admin user management endpoints (all `require_admin`): `GET /api/admin/users` (list w/ `role`/`email` + goal counts + table name), `POST /api/admin/users` (pre-crear usuario solo con `email` + `role`; alias = parte local del email; entra por Google), `PATCH /api/admin/users/{id}/role` (cambiar `role` admin|guest; bloquea auto-degradarse), `PUT /api/admin/users/{id}` (rename alias), `PATCH /api/admin/users/{id}/table` (assign/clear `table_id`), `DELETE /api/admin/users/{id}?delete_photos=false` (borrar; `false`=anonimizar fotos vía `SET user_id=NULL`, `true`=borrar fotos+archivos+SSE). After mutation they do `db.expire_all()` + fresh re-fetch because the ORM identity map otherwise returns the stale `table_rel` relationship. Borrado bloquea cuentas con `role='admin'` con 400
-- Models live in a single `app/models/models.py`; schemas in `app/schemas/schemas.py`; services in `app/services/` (`photo_service`, `auth_service`, `sse_manager`)
-- **No Alembic.** Schema = `Base.metadata.create_all` at startup, plus hand-written `ALTER TABLE` statements in the `main.py` lifespan (`challenges.locked`, `wedding_info.carousel_interval`). `create_all` never alters existing tables; adding a column to an existing DB must follow the same try/except `ALTER TABLE` pattern (SQLite has no `ADD COLUMN IF NOT EXISTS`)
+- Admin user management endpoints (all `require_admin`): `GET /api/admin/users` (list w/ `role`/`email` + goal counts + table name), `POST /api/admin/users` (pre-crear usuario solo con `email` + `role`; alias = parte local del email; entra por Google), `PATCH /api/admin/users/{id}/role` (cambiar `role` admin|guest; bloquea auto-degradarse), `PUT /api/admin/users/{id}` (rename alias), `PATCH /api/admin/users/{id}/table` (assign/clear `table_id`), `DELETE /api/admin/users/{id}?delete_photos=false` (borrar; `false`=anonimizar fotos vía `SET user_id=NULL`, `true`=borrar fotos+archivos+SSE). After mutation they run `_commit_and_fresh_user_response` (`db.commit()` + `db.expire_all()` + fresh re-fetch) because the ORM identity map otherwise returns stale rows/relationships. Borrado bloquea cuentas con `role='admin'` con 400
+- Models live in a single `app/models/models.py`; schemas in `app/schemas/schemas.py`; services in `app/services/` (`photo_service`, `auth_service`, `sse_manager`, `serializers` — serializers/responders + counts agrupados compartidos)
+- **No Alembic.** Schema = `Base.metadata.create_all` at startup, plus hand-written migrations in the `main.py` lifespan, all idempotent: `_ensure_user_roles` (columnas `users.email`/`password_hash`/`role` + índice único `ix_users_email` + borrado de placeholders `admin:%`), `ALTER TABLE` try/except para `challenges.locked`, `wedding_info.carousel_interval`, `wedding_info.message` y `challenge_photos.message`, y `_ensure_nullable_user_id` (reconstrucción RENAME→CREATE→INSERT→DROP de `gallery_photos`/`challenge_photos` con `PRAGMA table_info`). `create_all` never alters existing tables; adding a column to an existing DB must follow the same try/except `ALTER TABLE` pattern (SQLite has no `ADD COLUMN IF NOT EXISTS`)
 - **`user_id` nullable para fotos anónimas.** En BD nuevas `GalleryPhoto.user_id`/`ChallengePhoto.user_id` ya son `nullable=True`. En BD existentes, la migración `_ensure_nullable_user_id()` reconstruye ambas tablas (RENAME→CREATE→INSERT→DROP) de forma idempotente (`PRAGMA table_info`), preservando `UNIQUE (challenge_id, user_id)`; todas las lecturas de fotos usan OUTER JOIN a User y serializan `user_alias=None` cuando el autor fue borrado (`=> "Anónimo"` en la UI)
 - Uploaded files served as static mounts: `/api/uploads` → `Fotos/`, `/api/thumbnails` → `Miniaturas/`
 - Background task cleans orphan files every `ORPHAN_CLEANUP_INTERVAL` (default 10s)
@@ -44,13 +44,13 @@ Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. 
 The backend broadcasts these named events via `sse_manager.broadcast()`:
 | Event | Emitted by | Payload |
 |---|---|---|
-| `new_photo` | Main upload | `{ photo_id, url, thumbnail_url, ... }` |
-| `gallery_photo_deleted` | Admin delete photo | `{ photo_id }` |
+| `new_photo` | Main upload | `{ photo_id }` |
+| `gallery_photo_deleted` | Admin delete photo / delete user (`delete_photos=true`) | `{ photo_id }` |
 | `carousel_updated` | Admin add/reorder/delete carousel photo | `{}` |
 | `info_updated` | Admin PUT wedding-info | Full `WeddingInfoResponse` |
-| `new_challenge_photo` | FS upload | `{ photo_id, challenge_id, user_id, ... }` |
-| `challenge_photo_deleted` | Admin delete challenge photo | `{ photo_id, challenge_id }` |
-| `winner_selected` | Admin select/deselect winner | `{ winner_table_id, winner_table_name }` |
+| `new_challenge_photo` | FS upload | `{ photo_id, challenge_id, table_id }` |
+| `challenge_photo_deleted` | Admin delete challenge photo / delete user (`delete_photos=true`) | `{ photo_id, challenge_id }` |
+| `winner_selected` | Admin select/deselect winner | `{ table_id }` (`null` al deseleccionar) |
 
 - `SSEProvider` (React Context) registers exactly the 7 events above; only `MainPage` consumes `lastEvent` (refresh gallery on `new_photo`/`gallery_photo_deleted`, carousel on `carousel_updated`, wedding info on `info_updated`). `AdminPage` does **not** use SSE
 - `SecretDashboardPage` creates its **own EventSource** (`/api/events`, public) — does not depend on login
@@ -60,7 +60,7 @@ The backend broadcasts these named events via `sse_manager.broadcast()`:
 | Module | Purpose |
 |---|---|
 | **Main** | Upload/view/download photos; wedding info + carousel + gallery |
-| **Fotógrafo Secreto** | Per-table QR challenges; 10 retos/table, 1 photo/participant/reto, max = nro participantes mesa |
+| **Fotógrafo Secreto** | Per-table QR challenges (cantidad libre por mesa), 1 photo/participant/reto, max = nro participantes mesa |
 | **Admin** | Wedding panel; manage carousel, info, color scheme, tables, challenges, challenge photos, pick/deselect winner |
 
 ## Frontend routes
@@ -78,7 +78,7 @@ The backend broadcasts these named events via `sse_manager.broadcast()`:
 - Google OAuth for cross-device identity recovery; reemplaza alias con nombre de Google
 - Google devuelve email, nombre y foto de perfil; la foto se muestra junto al nombre en las fotos subidas
 - Files named with UUID to avoid collisions
-- Thumbnails generated on upload (150x150px, manteniendo aspect ratio)
+- Thumbnails generated on upload (caja máxima 150×150, aspect ratio preservado, `exif_transpose` incluido)
 - Infinite scroll pagination (offset/limit)
 - Photo directories: `Fotos/Carrucel/`, `Fotos/Galeria/`, `Fotos/Fotografo-Secreto/Mesa-XX/`
 - Validation: MIME type real (inspección de bytes) + extension
@@ -103,7 +103,7 @@ The backend broadcasts these named events via `sse_manager.broadcast()`:
 - QR generado como PNG estático en `Fotos/Fotografo-Secreto/Mesa-XX/QR.png`
 - Admin elige ganador subjetivamente; vista en grilla agrupada por reto; puede deseleccionar (vuelve a estado activo)
 - Cada participante solo ve **su propia foto** por reto (deduplicación server-side, no de UI)
-- Admin puede gestionar fotos de retos desde el tab `/Fotos Retos` (ver, borrar, mensaje del usuario visible)
+- Admin puede gestionar fotos de retos desde el tab **Retos** (botón "Fotos" por reto → modal con ver/borrar y mensaje del usuario)
 - El dashboard público escucha SSE (`new_challenge_photo`, `challenge_photo_deleted`, `winner_selected`) con un EventSource propio (no depende del login); confetti **solo** al elegir ganador (no al deseleccionar)
 
 ## Context API (frontend)
@@ -112,7 +112,7 @@ Contextos divididos en 3 archivos cada uno (patrón canónico fast-refresh; lint
 - `context/SSEContext.js` (`createContext`) + `context/SSEProvider.jsx` (`SSEProvider` component) + `context/useSSE.jsx` (`useSSE` hook)
 
 ## Database entities
-Canonical ER diagram in `README.md`. Summary: **User** (anonymous uuid+alias or Google-authenticated; `table_id` set once; `google_name`, `google_photo`; administradores con `email`+`password_hash`+`role='admin'`), **WeddingInfo** (couple names, date, color scheme, `winner_table_id`, `carousel_interval`), **CarouselPhoto**, **GalleryPhoto**, **Table** (unique QR links), **Challenge** (10 per table, `locked` flag), **ChallengePhoto** (1/user/reto, `message` field, `UniqueConstraint(challenge_id, user_id)`).
+Canonical ER diagram in `README.md`. Summary: **User** (anonymous uuid+alias or Google-authenticated; `table_id` set once; `google_name`, `google_photo`; administradores con `email`+`password_hash`+`role='admin'`), **WeddingInfo** (couple names, date, color scheme, `winner_table_id`, `carousel_interval`), **CarouselPhoto**, **GalleryPhoto**, **Table** (unique QR links), **Challenge** (retos por mesa, cantidad libre, `locked` flag), **ChallengePhoto** (1/user/reto, `message` field, `UniqueConstraint(challenge_id, user_id)`).
 
 ## Conventions
 - `README.md` is the canonical architecture reference with Mermaid diagrams

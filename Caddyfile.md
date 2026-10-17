@@ -2,7 +2,7 @@
 # =================================================
 # Este bloque se copia en la Caddyfile del contenedor Caddy del home server.
 # Caddy corre en la red Docker externa "proxy-net" (la misma que usa el
-# docker-compose.prod.yml de este proyecto).
+# docker-compose de producción, desplegado en el servidor como docker-compose.yml).
 
 boda.nehemiasfeliz.com {
 	tls /etc/caddy/cloudflare-origin/cert.pem /etc/caddy/cloudflare-origin/key.pem
@@ -16,8 +16,8 @@ boda.nehemiasfeliz.com {
 
 # Notas:
 # - "wedding-photo-manager-backend"/"wedding-photo-manager-frontend" son los
-#   nombres de contenedor fijados con `container_name` en docker-compose.prod.yml.
-#   Verifica con `docker compose -f docker-compose.prod.yml ps`.
+#   nombres de contenedor fijados con `container_name` en el compose de
+#   producción (en el servidor: docker-compose.yml). Verifica con `docker compose ps`.
 # - tls: usa el certificado de origen de Cloudflare (~15 años). La renovación es
 #   manual: reemplaza cert.pem/key.pem y recarga Caddy (`docker exec <caddy> caddy reload`).
 # - Los nombres de contenedor están fijados (no dependen del nombre del proyecto
