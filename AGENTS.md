@@ -12,7 +12,7 @@ Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. 
 - **Testing:** none yet. `backend/requirements-test.txt` is vestigial; no pytest/vitest suites, no `test` scripts
 
 ## Tech stack
-- **Backend:** FastAPI + SQLAlchemy (async) + SQLite (WAL) + pydantic-settings; libs Pillow (150×150 thumbnails), Authlib (Google OAuth), qrcode (table QRs)
+- **Backend:** FastAPI + SQLAlchemy (async) + SQLite (WAL) + pydantic-settings; libs Pillow (150×150 thumbnails) + pillow-heif (HEIC→JPEG), Authlib (Google OAuth), qrcode (table QRs)
 - **Frontend:** React 19 + Vite + Tailwind v4 + React Router; native `fetch` + React Context (no axios/Redux); SSE client
 - **Storage:** local filesystem `Fotos/` + `Miniaturas/` (mirrored structure); SQLite at `data/wedding.db` (path relative to CWD; `/app/data` in container)
 - **Auth:** Google OAuth (admin session cookie + guest identity recovery); anonymous guests via server-generated UUID stored in localStorage
@@ -82,7 +82,7 @@ The backend broadcasts these named events via `sse_manager.broadcast()`:
 - Infinite scroll pagination (offset/limit)
 - Photo directories: `Fotos/Carrucel/`, `Fotos/Galeria/`, `Fotos/Fotografo-Secreto/Mesa-XX/`
 - Validation: MIME type real (inspección de bytes) + extension
-- Max file size: 25 MB. All image formats accepted
+- Max file size: 25 MB. All image formats accepted (incluye `.heic`/`.heif` de iPhone: se convierten a JPEG al subir, porque solo Safari puede mostrarlos — la conversión aplica `exif_transpose` y guarda `{uuid}.jpg`; el original HEIC no se conserva)
 - Rate limit: 15 uploads/minute por usuario
 - Fotos servidas via FastAPI (sin autenticación para visualizar)
 - Descarga individual y por lote (seleccionando fotos)

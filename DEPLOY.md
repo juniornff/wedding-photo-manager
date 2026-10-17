@@ -73,6 +73,8 @@ docker compose ps
 
 - Si **solo** cambió `.env` (o settings de servicios), usa `docker compose up -d`
   para recrear los contenedores sin reconstruir las imágenes.
+- Si cambiaron **dependencias** (`requirements.txt` del backend o `package.json`
+  del frontend), el `--build` es obligatorio: la imagen instala las deps en build time.
 - Las migraciones de esquema (`ALTER TABLE`, creación de tablas) se ejecutan solas
   en el arranque del backend y son **idempotentes**, así que se pueden aplicar
   sobre la BD existente sin pasos manuales.

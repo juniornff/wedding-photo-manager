@@ -7,14 +7,33 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import UploadFile, HTTPException
-from PIL import Image
+from PIL import Image, ImageOps
+import pillow_heif
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.models import CarouselPhoto, GalleryPhoto, ChallengePhoto
 
-ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff', '.tif'}
+pillow_heif.register_heif_opener()
+
+ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff', '.tif', '.heic', '.heif'}
+
+HEIC_BRANDS = {b'heic', b'heix', b'hevc', b'hevx', b'heim', b'heis', b'hevm', b'hevs', b'mif1', b'msf1'}
+HEIC_MIMES = {'image/heic', 'image/heif'}
+
+EXT_ALLOWED_MIMES: dict[str, set[str]] = {
+    '.jpg': {'image/jpeg'} | HEIC_MIMES,
+    '.jpeg': {'image/jpeg'} | HEIC_MIMES,
+    '.png': {'image/png'},
+    '.gif': {'image/gif'},
+    '.webp': {'image/webp'},
+    '.bmp': {'image/bmp'},
+    '.tiff': {'image/tiff'},
+    '.tif': {'image/tiff'},
+    '.heic': HEIC_MIMES,
+    '.heif': HEIC_MIMES,
+}
 
 _upload_timestamps: dict[int, list[datetime]] = defaultdict(list)
 
@@ -30,6 +49,8 @@ def _get_mime_type(data: bytes) -> Optional[str]:
         return 'image/webp'
     if data[:2] == b'BM':
         return 'image/bmp'
+    if len(data) >= 12 and data[4:8] == b'ftyp' and data[8:12] in HEIC_BRANDS:
+        return 'image/heif' if data[8:12] in (b'mif1', b'msf1') else 'image/heic'
     if data[:2] in (b'II', b'MM'):
         return 'image/tiff'
     return None
@@ -50,14 +71,8 @@ def validate_file(file: UploadFile) -> None:
     if mime is None:
         raise HTTPException(status_code=400, detail="El archivo no es una imagen válida.")
 
-    ext_to_mime = {
-        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-        '.png': 'image/png', '.gif': 'image/gif',
-        '.webp': 'image/webp', '.bmp': 'image/bmp',
-        '.tiff': 'image/tiff', '.tif': 'image/tiff',
-    }
-    expected_mime = ext_to_mime.get(ext)
-    if expected_mime and mime != expected_mime:
+    allowed_mimes = EXT_ALLOWED_MIMES.get(ext)
+    if allowed_mimes and mime not in allowed_mimes:
         raise HTTPException(
             status_code=400,
             detail="La extensión del archivo no coincide con su contenido."
@@ -66,10 +81,29 @@ def validate_file(file: UploadFile) -> None:
 
 def save_photo(file: UploadFile, subdir: str) -> str:
     ext = Path(file.filename).suffix.lower() if file.filename else '.jpg'
-    filename = f"{uuid.uuid4()}{ext}"
-    relative_path = os.path.join(subdir, filename).replace('\\', '/')
+    if ext not in ALLOWED_EXTENSIONS:
+        ext = '.jpg'
+
+    content = file.file.read(32)
+    file.file.seek(0)
+
     abs_dir = os.path.join(settings.UPLOAD_DIR, subdir)
     os.makedirs(abs_dir, exist_ok=True)
+
+    if _get_mime_type(content) in HEIC_MIMES:
+        filename = f"{uuid.uuid4()}.jpg"
+        try:
+            with Image.open(file.file) as img:
+                img = ImageOps.exif_transpose(img)
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                img.save(os.path.join(abs_dir, filename), 'JPEG', quality=92)
+        except Exception:
+            raise HTTPException(status_code=400, detail="No se pudo procesar la imagen.")
+        return os.path.join(subdir, filename).replace('\\', '/')
+
+    filename = f"{uuid.uuid4()}{ext}"
+    relative_path = os.path.join(subdir, filename).replace('\\', '/')
     abs_path = os.path.join(abs_dir, filename)
 
     with open(abs_path, 'wb') as f:
@@ -88,6 +122,7 @@ def generate_thumbnail(source_path: str, subdir: str) -> str:
     abs_thumb = os.path.join(abs_dir, filename)
 
     with Image.open(abs_source) as img:
+        img = ImageOps.exif_transpose(img)
         img.thumbnail((150, 150), Image.LANCZOS)
         img.save(abs_thumb)
 

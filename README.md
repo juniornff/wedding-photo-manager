@@ -9,7 +9,7 @@ Aplicación web para gestionar fotos de bodas: subida, visualización y descarga
 | Capa | Tecnología |
 |---|---|
 | Backend | FastAPI + SQLAlchemy (async) + SQLite (WAL mode) |
-| Backend libs | Pillow (thumbnails), Authlib (OAuth), qrcode (QR gen), pydantic-settings (config) |
+| Backend libs | Pillow (thumbnails) + pillow-heif (HEIC→JPEG), Authlib (OAuth), qrcode (QR gen), pydantic-settings (config) |
 | Frontend | React 19 + Vite + TailwindCSS v4 + React Router |
 | Frontend HTTP | fetch nativo + React Context (sin Redux/axios) |
 | Tiempo real | Server-Sent Events (SSE) |
@@ -640,7 +640,7 @@ Miniaturas/
 - El **UUID lo genera el servidor** (`uuid4` aleatorio), se guarda en DB y se devuelve al cliente
 - Google OAuth permite **recuperar identidad** entre dispositivos; al vincularse, el alias se reemplaza por el nombre de Google y se muestra su foto de perfil
 - **Avatares de Google** (`lh3.googleusercontent.com`): responden **429** cuando el `Referer` de la petición es un origen HTTP inseguro (localhost/IP LAN). La app fija `<meta name="referrer" content="no-referrer">` en `index.html` para que las imágenes de perfil carguen en dev/LAN (y de igual forma en producción)
-- Solo imágenes (validación por **MIME type real** inspeccionando bytes + extensión) — **todos los formatos**, máx **25 MB**
+- Solo imágenes (validación por **MIME type real** inspeccionando bytes + extensión) — **todos los formatos** (HEIC/HEIF de iPhone incluidos: se convierten a JPEG al subir con `exif_transpose`, el original no se guarda), máx **25 MB**
 - Nombres de archivo con **UUID** para evitar colisiones
 - **Miniatura 150×150px** manteniendo aspect ratio
 - **Paginación infinita** con offset/limit

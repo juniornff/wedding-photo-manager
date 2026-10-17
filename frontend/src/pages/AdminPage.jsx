@@ -235,7 +235,7 @@ function CarouselTab() {
   return (
     <div>
       <div className="mb-4">
-        <input type="file" accept="image/*" onChange={handleUpload} disabled={uploading} className="text-sm" />
+        <input type="file" accept="image/*,.heic,.heif" onChange={handleUpload} disabled={uploading} className="text-sm" />
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {photos.map((photo, idx) => (

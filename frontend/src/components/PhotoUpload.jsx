@@ -84,7 +84,7 @@ export default function PhotoUpload({ uploadUrl, onSuccess }) {
 
             <input
               type="file"
-              accept="image/*"
+              accept="image/*,.heic,.heif"
               ref={fileRef}
               onChange={(e) => setFile(e.target.files[0])}
               className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[var(--color-secondary)] file:text-[var(--color-text)] hover:file:bg-[var(--color-primary)] hover:file:text-white cursor-pointer"
