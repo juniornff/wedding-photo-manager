@@ -2,14 +2,15 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
-from sqlalchemy import select, text
+from sqlalchemy import select, text, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from authlib.integrations.starlette_client import OAuth
 
 from app.database import get_db
-from app.models.models import User
+from app.models.models import User, ChallengePhoto
 from app.schemas.schemas import GuestCreate, UserResponse, AdminLogin
-from app.services.auth_service import create_guest, verify_password
+from app.services.auth_service import create_guest, verify_password, needs_rehash, hash_password
+from app.services.photo_service import delete_photo
 from app.config import settings, is_admin_email
 
 auth_router = APIRouter(prefix="/api", tags=["auth"])
@@ -51,6 +52,41 @@ async def google_login(request: Request, user_id: int | None = None):
     return await oauth.google.authorize_redirect(request, redirect_uri, state=state, prompt="select_account")
 
 
+async def _merge_guest_into_user(db: AsyncSession, target: User, source_id: int) -> None:
+    # Mueve fotos (galería + retos) y mesa del invitado `source_id` a `target` y lo borra.
+    # Colisiones UNIQUE(challenge_id, user_id): si ambos subieron al mismo reto, se
+    # descarta la foto del invitado (el target conserva la suya).
+    target_challenges = select(ChallengePhoto.challenge_id).where(ChallengePhoto.user_id == target.id)
+    colliding_paths = (await db.execute(
+        select(ChallengePhoto.path).where(
+            ChallengePhoto.user_id == source_id,
+            ChallengePhoto.challenge_id.in_(target_challenges),
+        )
+    )).scalars().all()
+    for path in colliding_paths:
+        delete_photo(path, path)
+    await db.execute(delete(ChallengePhoto).where(
+        ChallengePhoto.user_id == source_id,
+        ChallengePhoto.challenge_id.in_(target_challenges),
+    ))
+    await db.execute(
+        text("UPDATE gallery_photos SET user_id = :target WHERE user_id = :src"),
+        {"target": target.id, "src": source_id},
+    )
+    await db.execute(
+        text("UPDATE challenge_photos SET user_id = :target WHERE user_id = :src"),
+        {"target": target.id, "src": source_id},
+    )
+    if target.table_id is None:
+        src = await db.get(User, source_id)
+        if src and src.table_id is not None:
+            target.table_id = src.table_id
+            await db.flush()
+    # Borrado con SQL directo: el DELETE se ejecuta ya (Core), antes del flush de los
+    # UPDATE de google_id, o UNIQUE(users.google_id) chocaría en el mismo commit.
+    await db.execute(text("DELETE FROM users WHERE id = :src"), {"src": source_id})
+
+
 async def _resolve_admin_user(
     db: AsyncSession,
     email: str,
@@ -64,22 +100,8 @@ async def _resolve_admin_user(
     if by_email and by_sub and by_email.id != by_sub.id:
         # Fusionar: la cuenta creada desde .env (por email) absorbe la identidad
         # previa del invitado con el mismo sub de Google (conserva sus fotos).
-        await db.execute(
-            text("UPDATE gallery_photos SET user_id = :target WHERE user_id = :src"),
-            {"target": by_email.id, "src": by_sub.id},
-        )
-        await db.execute(
-            text("UPDATE challenge_photos SET user_id = :target WHERE user_id = :src"),
-            {"target": by_email.id, "src": by_sub.id},
-        )
-        if by_email.table_id is None and by_sub.table_id is not None:
-            by_email.table_id = by_sub.table_id
-            await db.flush()
-        # Borrar el invitado con SQL directo: el DELETE se ejecuta ya (Core),
-        # antes del flush del UPDATE de abajo, o el UNIQUE(google_id) chocaría
-        # (el unit of work de SQLAlchemy flushea los UPDATE antes que el DELETE).
-        await db.execute(text("DELETE FROM users WHERE id = :src"), {"src": by_sub.id})
         user = by_email
+        await _merge_guest_into_user(db, user, by_sub.id)
     elif by_email:
         user = by_email
     elif by_sub:
@@ -118,8 +140,17 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
 
     google_id = userinfo.get("sub")
     email = userinfo.get("email")
+    email = email.lower() if email else None
     name = userinfo.get("name")
     picture = userinfo.get("picture")
+
+    state_id = None
+    state = request.query_params.get("state")
+    if state and state != "None":
+        try:
+            state_id = int(state)
+        except (ValueError, TypeError):
+            state_id = None
 
     if email:
         result = await db.execute(select(User).where(User.email == email))
@@ -139,27 +170,10 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
     if not user and email:
         result = await db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
-        if user:
-            state = request.query_params.get("state")
-            if state and state != "None":
-                try:
-                    state_id = int(state)
-                except (ValueError, TypeError):
-                    state_id = None
-                if state_id and state_id != user.id:
-                    await db.execute(
-                        text("UPDATE gallery_photos SET user_id = :target WHERE user_id = :src"),
-                        {"target": user.id, "src": state_id},
-                    )
-                    await db.execute(
-                        text("UPDATE challenge_photos SET user_id = :target WHERE user_id = :src"),
-                        {"target": user.id, "src": state_id},
-                    )
-                    src = await db.get(User, state_id)
-                    if src and user.table_id is None and src.table_id is not None:
-                        user.table_id = src.table_id
-                        await db.flush()
-                    await db.execute(text("DELETE FROM users WHERE id = :src"), {"src": state_id})
+
+    if user and state_id and state_id != user.id:
+        await _merge_guest_into_user(db, user, state_id)
+        state_id = None
 
     if user:
         user.google_id = google_id
@@ -168,20 +182,15 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
         if email:
             user.email = email
     else:
-        state = request.query_params.get("state")
-        if state and state != "None":
-            try:
-                result = await db.execute(select(User).where(User.id == int(state)))
-                existing = result.scalar_one_or_none()
-                if existing:
-                    existing.google_id = google_id
-                    existing.google_name = name
-                    existing.google_photo = picture
-                    if email:
-                        existing.email = email
-                    user = existing
-            except (ValueError, TypeError):
-                pass
+        if state_id:
+            existing = await db.get(User, state_id)
+            if existing:
+                existing.google_id = google_id
+                existing.google_name = name
+                existing.google_photo = picture
+                if email:
+                    existing.email = email
+                user = existing
 
         if not user:
             user = User(
@@ -203,15 +212,19 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
 
 @auth_router.post("/admin/login")
 async def admin_login(body: AdminLogin, request: Request, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == body.email))
+    email = body.email.strip().lower()
+    result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
     if not user or not user.password_hash or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Credenciales inválidas.")
     if user.role != "admin":
         raise HTTPException(status_code=401, detail="No autorizado.")
-    request.session["admin_email"] = body.email
+    if needs_rehash(user.password_hash):
+        user.password_hash = hash_password(body.password)
+        await db.commit()
+    request.session["admin_email"] = email
     request.session["user_id"] = user.id
-    return {"message": "Login exitoso", "email": body.email, "role": user.role, "user_id": user.id}
+    return {"message": "Login exitoso", "email": email, "role": user.role, "user_id": user.id}
 
 
 @auth_router.post("/logout")

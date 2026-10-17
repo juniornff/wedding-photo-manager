@@ -5,7 +5,7 @@ import PhotoLightbox from './PhotoLightbox';
 export default function ChallengePhotosModal({ challenge, onClose, onDeleted }) {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedIdx, setSelectedIdx] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
 
   useEffect(() => {
     api(`/api/admin/challenges/${challenge.id}/photos`)
@@ -19,7 +19,7 @@ export default function ChallengePhotosModal({ challenge, onClose, onDeleted }) 
     try {
       await api(`/api/admin/challenges/${challenge.id}/photos/${photo.id}`, { method: 'DELETE' });
       setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
-      setSelectedIdx((idx) => (idx !== null && photos[idx]?.id === photo.id ? null : idx));
+      setSelectedId((cur) => (cur === photo.id ? null : cur));
       if (onDeleted) onDeleted();
     } catch (err) {
       alert(err.message);
@@ -56,7 +56,7 @@ export default function ChallengePhotosModal({ challenge, onClose, onDeleted }) 
             <div className="overflow-y-auto pr-1 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {photos.map((photo, idx) => (
                 <div key={photo.id || idx} className="bg-gray-50 rounded-lg overflow-hidden border border-gray-100">
-                  <button onClick={() => setSelectedIdx(idx)} className="w-full cursor-pointer border-0 p-0">
+                  <button onClick={() => setSelectedId(photo.id)} className="w-full cursor-pointer border-0 p-0">
                     <img
                       src={photo.thumbnail_path ? `${API_BASE}/api/thumbnails/${photo.thumbnail_path}` : `${API_BASE}/api/uploads/${photo.path}`}
                       alt=""
@@ -94,12 +94,12 @@ export default function ChallengePhotosModal({ challenge, onClose, onDeleted }) 
         </div>
       </div>
 
-      {selectedIdx !== null && (
+      {selectedId !== null && photos.some((p) => p.id === selectedId) && (
         <PhotoLightbox
           photos={photos}
-          index={selectedIdx}
-          onClose={() => setSelectedIdx(null)}
-          onNavigate={setSelectedIdx}
+          index={photos.findIndex((p) => p.id === selectedId)}
+          onClose={() => setSelectedId(null)}
+          onNavigate={(i) => setSelectedId(photos[i]?.id ?? null)}
           onDelete={handleDelete}
         />
       )}

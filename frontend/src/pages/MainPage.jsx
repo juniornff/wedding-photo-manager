@@ -16,20 +16,23 @@ export default function MainPage() {
   const intervalRef = useRef(null);
   const { lastEvent } = useSSE();
 
+  const applyColors = useCallback((colorScheme) => {
+    if (!colorScheme) return;
+    const colors = colorScheme.split(',').map((c) => c.trim());
+    if (colors[0]) document.documentElement.style.setProperty('--color-primary', colors[0]);
+    if (colors[1]) document.documentElement.style.setProperty('--color-secondary', colors[1]);
+    if (colors[2]) document.documentElement.style.setProperty('--color-accent', colors[2]);
+    if (colors[3]) document.documentElement.style.setProperty('--color-bg', colors[3]);
+    if (colors[4]) document.documentElement.style.setProperty('--color-text', colors[4]);
+  }, []);
+
   useEffect(() => {
     api('/api/wedding-info').then((data) => {
       setInfo(data);
-      if (data.color_scheme) {
-        const colors = data.color_scheme.split(',').map((c) => c.trim());
-        if (colors[0]) document.documentElement.style.setProperty('--color-primary', colors[0]);
-        if (colors[1]) document.documentElement.style.setProperty('--color-secondary', colors[1]);
-        if (colors[2]) document.documentElement.style.setProperty('--color-accent', colors[2]);
-        if (colors[3]) document.documentElement.style.setProperty('--color-bg', colors[3]);
-        if (colors[4]) document.documentElement.style.setProperty('--color-text', colors[4]);
-      }
+      applyColors(data.color_scheme);
     }).catch(() => {});
     api('/api/carousel').then(setCarousel).catch(() => {});
-  }, []);
+  }, [applyColors]);
 
   useEffect(() => {
     if (carousel.length === 0) return;
@@ -42,9 +45,14 @@ export default function MainPage() {
   }, [carousel.length, info?.carousel_interval]);
 
   useEffect(() => {
+    setCarouselIdx((prev) => (carousel.length ? prev % carousel.length : 0));
+  }, [carousel.length]);
+
+  useEffect(() => {
     if (!lastEvent) return;
     if (lastEvent.type === 'info_updated' && lastEvent.data) {
       setInfo(lastEvent.data);
+      applyColors(lastEvent.data.color_scheme);
     }
     if (lastEvent.type === 'carousel_updated') {
       api('/api/carousel').then(setCarousel).catch(() => {});
@@ -55,7 +63,7 @@ export default function MainPage() {
     if (lastEvent.type === 'gallery_photo_deleted') {
       window.dispatchEvent(new CustomEvent('refresh-gallery'));
     }
-  }, [lastEvent]);
+  }, [lastEvent, applyColors]);
 
   const handleNewPhoto = useCallback(() => {
     window.dispatchEvent(new CustomEvent('refresh-gallery'));

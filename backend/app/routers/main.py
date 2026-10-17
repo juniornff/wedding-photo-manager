@@ -18,8 +18,7 @@ from app.schemas.schemas import (
 )
 from app.services.photo_service import (
     validate_file,
-    save_photo,
-    generate_thumbnail,
+    save_photo_with_thumbnail,
     check_rate_limit,
 )
 from app.services.sse_manager import sse_manager
@@ -111,8 +110,7 @@ async def upload_photo(
 
     validate_file(file)
 
-    photo_path = save_photo(file, "Galeria")
-    thumbnail_path = generate_thumbnail(photo_path, "Galeria")
+    photo_path, thumbnail_path = save_photo_with_thumbnail(file, "Galeria")
 
     gallery_photo = GalleryPhoto(
         uuid=photo_path.split("/")[-1].split(".")[0],

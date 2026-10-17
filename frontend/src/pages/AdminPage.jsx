@@ -20,9 +20,32 @@ function TabButton({ active, onClick, children }) {
 
 function DashboardTab() {
   const [stats, setStats] = useState(null);
-  useEffect(() => {
-    api('/api/admin/dashboard').then(setStats).catch(() => {});
+  const [error, setError] = useState(null);
+
+  const load = useCallback(() => {
+    setError(null);
+    api('/api/admin/dashboard')
+      .then(setStats)
+      .catch((err) => setError(err.message));
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (error) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-red-500 mb-3">{error}</p>
+        <button
+          onClick={load}
+          className="text-sm px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white hover:brightness-110 transition cursor-pointer"
+        >
+          Reintentar
+        </button>
+      </div>
+    );
+  }
   if (!stats) return <p className="text-gray-400">Cargando...</p>;
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -86,7 +109,8 @@ function ColorField({ label, desc, value, onChange, defaultVal }) {
 
 function WeddingInfoTab() {
   const [form, setForm] = useState({ novio1_name: '', novio2_name: '', wedding_date: '', message: '', color_primary: '', color_secondary: '', color_accent: '', color_bg: '', color_text: '', carousel_interval: 5 });
-  const [msg, setMsg] = useState('');
+  const [msg, setMsg] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   const initForm = (data) => {
     const colors = (data?.color_scheme || '').split(',').map((c) => c.trim());
@@ -109,6 +133,7 @@ function WeddingInfoTab() {
   }, []);
 
   const handleSave = async () => {
+    setSaving(true);
     try {
       const parts = COLOR_FIELDS.map((f) => form[f.key] || DEFAULT_COLORS[f.key]).filter(Boolean);
       await api('/api/admin/wedding-info', {
@@ -122,10 +147,12 @@ function WeddingInfoTab() {
           carousel_interval: form.carousel_interval || null,
         }),
       });
-      setMsg('Información actualizada');
-      setTimeout(() => setMsg(''), 2000);
+      setMsg({ text: 'Información actualizada', type: 'ok' });
+      setTimeout(() => setMsg(null), 2000);
     } catch (err) {
-      setMsg('Error: ' + err.message);
+      setMsg({ text: 'Error: ' + err.message, type: 'error' });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -173,8 +200,16 @@ function WeddingInfoTab() {
         <label className="block text-sm font-medium mb-1">Intervalo del carrusel (segundos)</label>
         <input type="number" min="2" max="60" value={form.carousel_interval} onChange={(e) => setForm({ ...form, carousel_interval: parseInt(e.target.value) || 5 })} className="w-full border rounded-lg p-2 text-sm" />
       </div>
-      <button onClick={handleSave} className="px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm cursor-pointer">Salvar</button>
-      {msg && <p className="text-sm text-green-600">{msg}</p>}
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm cursor-pointer disabled:opacity-50"
+      >
+        {saving ? 'Guardando...' : 'Salvar'}
+      </button>
+      {msg && (
+        <p className={`text-sm ${msg.type === 'error' ? 'text-red-600' : 'text-green-600'}`}>{msg.text}</p>
+      )}
     </div>
   );
 }
@@ -198,6 +233,7 @@ function CarouselTab() {
       fd.append('file', file);
       const data = await apiUpload('/api/admin/carousel', fd);
       setPhotos((prev) => [...prev, data]);
+      e.target.value = '';
     } catch (err) {
       alert(err.message);
     } finally {
@@ -525,7 +561,7 @@ function GalleryTab() {
   const [photos, setPhotos] = useState([]);
   const [users, setUsers] = useState([]);
   const [filterUserId, setFilterUserId] = useState('');
-  const [selectedIdx, setSelectedIdx] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
 
   const loadPhotos = () => {
     Promise.all([
@@ -544,31 +580,42 @@ function GalleryTab() {
   const filteredPhotos =
     filterUserId === '' ? photos : photos.filter((p) => (p.user_id ?? null) === (filterUserId === 'anon' ? null : Number(filterUserId)));
 
-  const selected = selectedIdx !== null ? filteredPhotos[selectedIdx] : null;
+  const selectedIndex = selectedId !== null ? filteredPhotos.findIndex((p) => p.id === selectedId) : -1;
+  const selected = selectedIndex >= 0 ? filteredPhotos[selectedIndex] : null;
 
   const displayName = (u) => u.google_name || u.alias || u.email || `Usuario #${u.id}`;
 
   const handleFilterChange = (value) => {
     setFilterUserId(value);
-    setSelectedIdx(null);
+    setSelectedId(null);
   };
 
   useEffect(() => {
-    if (selectedIdx === null) return;
+    if (selectedId === null) return;
     const handler = (e) => {
-      if (e.key === 'Escape') setSelectedIdx(null);
-      if (e.key === 'ArrowLeft') setSelectedIdx((i) => (i > 0 ? i - 1 : i));
-      if (e.key === 'ArrowRight') setSelectedIdx((i) => (i < filteredPhotos.length - 1 ? i + 1 : i));
+      if (e.key === 'Escape') setSelectedId(null);
+      if (e.key === 'ArrowLeft') {
+        setSelectedId((cur) => {
+          const i = filteredPhotos.findIndex((p) => p.id === cur);
+          return i > 0 ? filteredPhotos[i - 1].id : cur;
+        });
+      }
+      if (e.key === 'ArrowRight') {
+        setSelectedId((cur) => {
+          const i = filteredPhotos.findIndex((p) => p.id === cur);
+          return i >= 0 && i < filteredPhotos.length - 1 ? filteredPhotos[i + 1].id : cur;
+        });
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [selectedIdx, filteredPhotos.length]);
+  }, [selectedId, filteredPhotos]);
 
   const handleDelete = async (id) => {
     if (!confirm('¿Eliminar esta foto?')) return;
     try {
       await api(`/api/admin/gallery/${id}`, { method: 'DELETE' });
-      if (selected?.id === id) setSelectedIdx(null);
+      setSelectedId((cur) => (cur === id ? null : cur));
       setPhotos((prev) => prev.filter((p) => p.id !== id));
     } catch (err) {
       alert(err.message);
@@ -604,7 +651,7 @@ function GalleryTab() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {filteredPhotos.map((photo, idx) => (
           <div key={photo.id || idx} className="bg-white rounded-xl overflow-hidden shadow-sm">
-            <button onClick={() => setSelectedIdx(idx)} className="w-full cursor-pointer border-0 p-0">
+            <button onClick={() => setSelectedId(photo.id)} className="w-full cursor-pointer border-0 p-0">
               <img src={photo.thumbnail_path ? `${API_BASE}/api/thumbnails/${photo.thumbnail_path}` : photo.path ? `${API_BASE}/api/uploads/${photo.path}` : ''} alt="" className="aspect-square object-cover w-full" loading="lazy" />
             </button>
             <div className="p-2 space-y-1">
@@ -627,27 +674,27 @@ function GalleryTab() {
       {selected && (
         <div
           className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
-          onClick={() => setSelectedIdx(null)}
+          onClick={() => setSelectedId(null)}
         >
           <div
             className="relative max-w-3xl w-full max-h-[90vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-end mb-2">
-              <button onClick={() => setSelectedIdx(null)} className="text-white text-2xl hover:opacity-70 cursor-pointer">&times;</button>
+              <button onClick={() => setSelectedId(null)} className="text-white text-2xl hover:opacity-70 cursor-pointer">&times;</button>
             </div>
 
             <div className="relative flex items-center justify-center bg-black/40 rounded-t-xl overflow-hidden min-h-[300px]">
-              {selectedIdx > 0 && (
-                <button onClick={() => setSelectedIdx(selectedIdx - 1)} className="absolute left-2 top-1/2 -translate-y-1/2 text-white text-4xl hover:opacity-70 cursor-pointer z-10 px-2">‹</button>
+              {selectedIndex > 0 && (
+                <button onClick={() => setSelectedId(filteredPhotos[selectedIndex - 1].id)} className="absolute left-2 top-1/2 -translate-y-1/2 text-white text-4xl hover:opacity-70 cursor-pointer z-10 px-2">‹</button>
               )}
               <img
                 src={selected.path ? `${API_BASE}/api/uploads/${selected.path}` : ''}
                 alt={selected.message || 'Foto'}
                 className="max-w-full max-h-[70vh] object-contain"
               />
-              {selectedIdx < filteredPhotos.length - 1 && (
-                <button onClick={() => setSelectedIdx(selectedIdx + 1)} className="absolute right-2 top-1/2 -translate-y-1/2 text-white text-4xl hover:opacity-70 cursor-pointer z-10 px-2">›</button>
+              {selectedIndex < filteredPhotos.length - 1 && (
+                <button onClick={() => setSelectedId(filteredPhotos[selectedIndex + 1].id)} className="absolute right-2 top-1/2 -translate-y-1/2 text-white text-4xl hover:opacity-70 cursor-pointer z-10 px-2">›</button>
               )}
             </div>
 

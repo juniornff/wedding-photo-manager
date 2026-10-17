@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { AuthProvider } from './context/AuthProvider';
 import { SSEProvider } from './context/SSEProvider';
 import Navbar from './components/Navbar';
@@ -10,6 +10,21 @@ import SecretDashboardPage from './pages/SecretDashboardPage';
 import AdminPage from './pages/AdminPage';
 import PrivacyPage from './pages/PrivacyPage';
 import TermsPage from './pages/TermsPage';
+
+function NotFound() {
+  return (
+    <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 px-4">
+      <h1 className="text-5xl font-bold text-[var(--color-primary)]">404</h1>
+      <p className="text-gray-500">Página no encontrada</p>
+      <Link
+        to="/"
+        className="px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white hover:brightness-110 transition"
+      >
+        Volver al inicio
+      </Link>
+    </div>
+  );
+}
 
 export default function App() {
   return (
@@ -25,6 +40,7 @@ export default function App() {
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/privacidad" element={<PrivacyPage />} />
             <Route path="/terminos" element={<TermsPage />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
           <Footer />
         </SSEProvider>

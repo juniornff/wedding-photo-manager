@@ -23,14 +23,18 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
   const [hasMore, setHasMore] = useState(true);
   const [selectedIdx, setSelectedIdx] = useState(null);
   const sentinelRef = useRef(null);
+  const requestIdRef = useRef(0);
 
   const fetchPhotos = useCallback(async (currentOffset, append = false) => {
+    const requestId = ++requestIdRef.current;
     if (!append) setLoading(true);
     else setLoadingMore(true);
     try {
       const url = `${fetchUrl}${fetchUrl.includes('?') ? '&' : '?'}offset=${currentOffset}&limit=12`;
       const res = await fetch(`${API_BASE}${url}`);
+      if (!res.ok) throw new Error('Error al cargar fotos');
       const data = await res.json();
+      if (requestId !== requestIdRef.current) return;
       const items = Array.isArray(data) ? data : (data.items || data.photos || []);
       if (append) {
         setPhotos((prev) => [...prev, ...items]);
@@ -40,10 +44,12 @@ export default function PhotoGrid({ fetchUrl, emptyMessage = 'No hay fotos aún'
       setOffset(currentOffset + items.length);
       if (items.length < 12) setHasMore(false);
     } catch {
-      setHasMore(false);
+      if (requestId === requestIdRef.current) setHasMore(false);
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   }, [fetchUrl]);
 

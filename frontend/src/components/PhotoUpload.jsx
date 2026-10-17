@@ -17,8 +17,16 @@ export default function PhotoUpload({ uploadUrl, onSuccess }) {
   }, []);
 
   const showNotification = (msg, type = 'success') => {
+    if (timerRef.current) clearTimeout(timerRef.current);
     setNotification({ msg, type });
     timerRef.current = setTimeout(() => setNotification(null), 3000);
+  };
+
+  const close = () => {
+    setOpen(false);
+    setFile(null);
+    setMessage('');
+    if (fileRef.current) fileRef.current.value = '';
   };
 
   const handleUpload = async () => {
@@ -35,9 +43,7 @@ export default function PhotoUpload({ uploadUrl, onSuccess }) {
       if (message.trim()) fd.append('message', message.trim());
       const data = await apiUpload(uploadUrl, fd);
       showNotification('¡Foto subida con éxito!');
-      setOpen(false);
-      setFile(null);
-      setMessage('');
+      close();
       if (onSuccess) onSuccess(data);
     } catch (err) {
       showNotification(err.message, 'error');
@@ -75,7 +81,7 @@ export default function PhotoUpload({ uploadUrl, onSuccess }) {
       )}
 
       {open && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={close}>
           <div
             className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl"
             onClick={(e) => e.stopPropagation()}
@@ -101,7 +107,7 @@ export default function PhotoUpload({ uploadUrl, onSuccess }) {
 
             <div className="flex gap-3 mt-4 justify-end">
               <button
-                onClick={() => setOpen(false)}
+                onClick={close}
                 className="px-4 py-2 rounded-lg border border-gray-300 text-sm hover:bg-gray-100 cursor-pointer"
               >
                 Cancelar

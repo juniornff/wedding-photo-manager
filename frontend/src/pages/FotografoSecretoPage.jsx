@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import PhotoUpload from '../components/PhotoUpload';
 import PhotoLightbox from '../components/PhotoLightbox';
 import { useAuth } from '../context/useAuth';
@@ -32,6 +32,7 @@ export default function FotografoSecretoPage() {
       .then((data) => {
         setTable(data.table || data);
         setChallenges(data.challenges || []);
+        setError(null);
         if (user) {
           window.dispatchEvent(new CustomEvent('table-assigned'));
         }
@@ -47,8 +48,20 @@ export default function FotografoSecretoPage() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="text-center">
-          <p className="text-red-500 text-lg mb-2">{error}</p>
-          <a href="/" className="text-sm text-[var(--color-accent)] hover:underline">Volver al inicio</a>
+          <p className="text-red-500 text-lg mb-3">{error}</p>
+          <div className="flex items-center justify-center gap-4">
+            <button
+              onClick={() => {
+                setError(null);
+                setTable(null);
+                loadTable();
+              }}
+              className="text-sm px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white hover:brightness-110 transition cursor-pointer"
+            >
+              Reintentar
+            </button>
+            <Link to="/" className="text-sm text-[var(--color-accent)] hover:underline">Volver al inicio</Link>
+          </div>
         </div>
       </div>
     );
@@ -149,11 +162,13 @@ export default function FotografoSecretoPage() {
                 <PhotoUpload
                   uploadUrl={`/api/secret-photographer/upload?challenge_id=${selectedChallenge.id}`}
                   onSuccess={() => {
-                    fetchTable().then((data) => {
-                      setChallenges(data.challenges || []);
-                      const updated = (data.challenges || []).find((c) => c.id === selectedChallenge.id);
-                      if (updated) setSelectedChallenge(updated);
-                    });
+                    fetchTable()
+                      .then((data) => {
+                        setChallenges(data.challenges || []);
+                        const updated = (data.challenges || []).find((c) => c.id === selectedChallenge.id);
+                        if (updated) setSelectedChallenge(updated);
+                      })
+                      .catch((err) => setError(err.message));
                   }}
                 />
               </>

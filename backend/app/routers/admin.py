@@ -5,7 +5,7 @@ import uuid
 import qrcode
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import FileResponse
-from sqlalchemy import select, func, delete, text
+from sqlalchemy import select, func, delete, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -39,7 +39,7 @@ from app.schemas.schemas import (
     UserRoleUpdate,
     ROLES,
 )
-from app.services.photo_service import validate_file, save_photo, generate_thumbnail, delete_photo
+from app.services.photo_service import validate_file, save_photo_with_thumbnail, delete_photo
 from app.services.sse_manager import sse_manager
 from app.dependencies import require_admin
 from app.config import settings, is_admin_email
@@ -148,8 +148,7 @@ async def upload_carousel_photo(
 ):
     validate_file(file)
 
-    photo_path = save_photo(file, "Carrucel")
-    thumbnail_path = generate_thumbnail(photo_path, "Carrucel")
+    photo_path, thumbnail_path = save_photo_with_thumbnail(file, "Carrucel")
 
     result = await db.execute(select(func.max(CarouselPhoto.sort_order)))
     max_order = result.scalar() or -1
@@ -294,6 +293,11 @@ async def delete_table(table_id: int, db: AsyncSession = Depends(get_db)):
     for cp in result.scalars().all():
         delete_photo(cp.path, cp.thumbnail_path)
 
+    # Desvincular referencias antes de borrar (FKs sin ON DELETE en SQLite).
+    await db.execute(update(User).where(User.table_id == table_id).values(table_id=None))
+    await db.execute(
+        update(WeddingInfo).where(WeddingInfo.winner_table_id == table_id).values(winner_table_id=None)
+    )
     await db.execute(delete(ChallengePhoto).where(
         ChallengePhoto.challenge_id.in_(
             select(Challenge.id).where(Challenge.table_id == table_id)
@@ -673,6 +677,8 @@ async def _get_user_or_404(user_id: int, db: AsyncSession) -> User:
 
 async def _fresh_user_response(user_id: int, db: AsyncSession) -> AdminUserResponse:
     user = await _fetch_user(user_id, db)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
     return _user_response(user)
 
 

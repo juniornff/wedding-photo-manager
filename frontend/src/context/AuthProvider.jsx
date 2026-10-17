@@ -2,6 +2,34 @@ import { useState, useEffect, useCallback } from 'react';
 import { AuthContext } from './AuthContext';
 import { api, API_BASE } from '../api';
 
+function safeGet(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // localStorage no disponible
+  }
+}
+
+function safeRemove(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // localStorage no disponible
+  }
+}
+
+function isValidId(value) {
+  return /^\d+$/.test(String(value ?? ''));
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -10,14 +38,14 @@ export function AuthProvider({ children }) {
   const checkSession = useCallback(async () => {
     const params = new URLSearchParams(window.location.search);
     const googleUserId = params.get('google_user');
-    if (googleUserId) {
+    if (googleUserId && isValidId(googleUserId)) {
       try {
         const data = await api(`/api/guest/me?user_id=${googleUserId}`);
-        localStorage.setItem('wedding_uuid', data.uuid);
-        localStorage.setItem('wedding_user_id', data.id);
-        if (data.alias) localStorage.setItem('wedding_alias', data.alias);
-        if (data.google_name) localStorage.setItem('wedding_google_name', data.google_name);
-        if (data.google_photo) localStorage.setItem('wedding_google_photo', data.google_photo);
+        safeSet('wedding_uuid', data.uuid);
+        safeSet('wedding_user_id', data.id);
+        if (data.alias) safeSet('wedding_alias', data.alias);
+        if (data.google_name) safeSet('wedding_google_name', data.google_name);
+        if (data.google_photo) safeSet('wedding_google_photo', data.google_photo);
         setUser(data);
       } catch {
         setUser(null);
@@ -31,13 +59,13 @@ export function AuthProvider({ children }) {
       if (res.ok) {
         const data = await res.json();
         if (data.is_admin) {
-          localStorage.setItem('wedding_is_admin', 'true');
+          safeSet('wedding_is_admin', 'true');
           setIsAdmin(true);
           if (data.user_id) {
-            localStorage.setItem('wedding_uuid', data.uuid);
-            localStorage.setItem('wedding_user_id', data.user_id);
-            localStorage.setItem('wedding_alias', data.alias);
-            if (data.role) localStorage.setItem('wedding_role', data.role);
+            safeSet('wedding_uuid', data.uuid);
+            safeSet('wedding_user_id', data.user_id);
+            safeSet('wedding_alias', data.alias);
+            if (data.role) safeSet('wedding_role', data.role);
             setUser({
               id: data.user_id,
               uuid: data.uuid,
@@ -50,39 +78,39 @@ export function AuthProvider({ children }) {
             return;
           }
         } else {
-          localStorage.removeItem('wedding_is_admin');
+          safeRemove('wedding_is_admin');
           setIsAdmin(false);
         }
       } else {
-        localStorage.removeItem('wedding_is_admin');
+        safeRemove('wedding_is_admin');
         setIsAdmin(false);
       }
     } catch {
-      localStorage.removeItem('wedding_is_admin');
+      safeRemove('wedding_is_admin');
       setIsAdmin(false);
     }
 
-    const uuid = localStorage.getItem('wedding_uuid');
+    const uuid = safeGet('wedding_uuid');
     if (!uuid) {
       setLoading(false);
       return;
     }
-    const storedId = localStorage.getItem('wedding_user_id');
-    if (storedId) {
+    const storedId = safeGet('wedding_user_id');
+    if (storedId && isValidId(storedId)) {
       try {
         const data = await api(`/api/guest/me?user_id=${storedId}`);
-        if (data.role) localStorage.setItem('wedding_role', data.role);
+        if (data.role) safeSet('wedding_role', data.role);
         setUser(data);
       } catch {
-        const alias = localStorage.getItem('wedding_alias');
-        setUser({ id: parseInt(storedId), uuid, alias,
-          role: localStorage.getItem('wedding_role'),
-          google_name: localStorage.getItem('wedding_google_name'),
-          google_photo: localStorage.getItem('wedding_google_photo'),
+        const alias = safeGet('wedding_alias');
+        setUser({ id: parseInt(storedId, 10), uuid, alias,
+          role: safeGet('wedding_role'),
+          google_name: safeGet('wedding_google_name'),
+          google_photo: safeGet('wedding_google_photo'),
         });
       }
     } else {
-      const alias = localStorage.getItem('wedding_alias');
+      const alias = safeGet('wedding_alias');
       setUser({ uuid, alias });
     }
     setLoading(false);
@@ -97,25 +125,25 @@ export function AuthProvider({ children }) {
       method: 'POST',
       body: JSON.stringify({ alias }),
     });
-    localStorage.setItem('wedding_uuid', data.uuid);
-    localStorage.setItem('wedding_user_id', data.id);
-    localStorage.setItem('wedding_alias', alias);
-    if (data.role) localStorage.setItem('wedding_role', data.role);
-    if (data.google_name) localStorage.setItem('wedding_google_name', data.google_name);
-    if (data.google_photo) localStorage.setItem('wedding_google_photo', data.google_photo);
+    safeSet('wedding_uuid', data.uuid);
+    safeSet('wedding_user_id', data.id);
+    safeSet('wedding_alias', alias);
+    if (data.role) safeSet('wedding_role', data.role);
+    if (data.google_name) safeSet('wedding_google_name', data.google_name);
+    if (data.google_photo) safeSet('wedding_google_photo', data.google_photo);
     setUser(data);
     return data;
   };
 
   const logout = () => {
     fetch(`${API_BASE}/api/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
-    localStorage.removeItem('wedding_uuid');
-    localStorage.removeItem('wedding_user_id');
-    localStorage.removeItem('wedding_alias');
-    localStorage.removeItem('wedding_google_name');
-    localStorage.removeItem('wedding_google_photo');
-    localStorage.removeItem('wedding_is_admin');
-    localStorage.removeItem('wedding_role');
+    safeRemove('wedding_uuid');
+    safeRemove('wedding_user_id');
+    safeRemove('wedding_alias');
+    safeRemove('wedding_google_name');
+    safeRemove('wedding_google_photo');
+    safeRemove('wedding_is_admin');
+    safeRemove('wedding_role');
     setUser(null);
     setIsAdmin(false);
   };

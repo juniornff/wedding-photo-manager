@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { api } from '../api';
 
@@ -43,6 +44,11 @@ export default function Navbar() {
     return () => window.removeEventListener('show-login', handler);
   }, []);
 
+  const closeLogin = () => {
+    setShowLogin(false);
+    setError('');
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     if (!alias.trim()) return;
@@ -60,22 +66,22 @@ export default function Navbar() {
     <nav className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-[var(--color-secondary)]">
       <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
         <div className="flex items-center gap-4">
-        <a href="/" className="font-bold text-lg" style={{ color: 'var(--color-primary)' }}>
+        <Link to="/" className="font-bold text-lg" style={{ color: 'var(--color-primary)' }}>
           Wedding Photo
-        </a>
-        <a
-          href="/fotografo-secreto"
+        </Link>
+        <Link
+          to="/fotografo-secreto"
           className="text-sm text-gray-500 hover:text-[var(--color-accent)] transition"
         >
           Fotógrafo Secreto
-        </a>
+        </Link>
         {myTable && (
-          <a
-            href={`/fotografo-secreto/${myTable.qr_code}`}
+          <Link
+            to={`/fotografo-secreto/${myTable.qr_code}`}
             className="text-xs px-3 py-1 rounded-full border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-[var(--color-primary)] hover:text-white transition"
           >
             Mi Mesa
-          </a>
+          </Link>
         )}
       </div>
 
@@ -91,12 +97,12 @@ export default function Navbar() {
                 </span>
               </div>
               {isAdmin && (
-                <a
-                  href="/admin"
+                <Link
+                  to="/admin"
                   className="text-xs px-3 py-1 rounded-full border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-[var(--color-primary)] hover:text-white transition"
                 >
                   Admin
-                </a>
+                </Link>
               )}
               {user && !user.google_name && !user.google_photo && (
                 <a
@@ -125,7 +131,7 @@ export default function Navbar() {
       </div>
 
       {showLogin && (
-        <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 px-4 pt-[15vh]" onClick={() => setShowLogin(false)}>
+        <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 px-4 pt-[15vh]" onClick={closeLogin}>
           <div
             className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl"
             onClick={(e) => e.stopPropagation()}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import PhotoLightbox from '../components/PhotoLightbox';
 import { API_BASE, api } from '../api';
 
@@ -84,6 +85,7 @@ export default function SecretDashboardPage() {
       prevWinnerRef.current = winner;
 
       setDashboard(data);
+      setError(null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -125,8 +127,20 @@ export default function SecretDashboardPage() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="text-center">
-          <p className="text-red-500 text-lg mb-2">{error}</p>
-          <a href="/" className="text-sm text-[var(--color-accent)] hover:underline">Volver al inicio</a>
+          <p className="text-red-500 text-lg mb-3">{error}</p>
+          <div className="flex items-center justify-center gap-4">
+            <button
+              onClick={() => {
+                setError(null);
+                setLoading(true);
+                fetchDashboard();
+              }}
+              className="text-sm px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white hover:brightness-110 transition cursor-pointer"
+            >
+              Reintentar
+            </button>
+            <Link to="/" className="text-sm text-[var(--color-accent)] hover:underline">Volver al inicio</Link>
+          </div>
         </div>
       </div>
     );

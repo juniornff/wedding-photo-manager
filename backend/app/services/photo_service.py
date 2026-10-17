@@ -1,4 +1,6 @@
 import os
+import logging
+import time
 import uuid
 from pathlib import Path
 from io import BytesIO
@@ -14,6 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.models import CarouselPhoto, GalleryPhoto, ChallengePhoto
+
+logger = logging.getLogger(__name__)
 
 pillow_heif.register_heif_opener()
 
@@ -62,6 +66,13 @@ def validate_file(file: UploadFile) -> None:
         raise HTTPException(
             status_code=400,
             detail="Formato de archivo no permitido. Solo se aceptan imágenes."
+        )
+
+    max_bytes = settings.MAX_UPLOAD_SIZE * 1024 * 1024
+    if file.size is not None and file.size > max_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"El archivo supera el límite de {settings.MAX_UPLOAD_SIZE} MB."
         )
 
     content = file.file.read(32)
@@ -121,12 +132,28 @@ def generate_thumbnail(source_path: str, subdir: str) -> str:
     os.makedirs(abs_dir, exist_ok=True)
     abs_thumb = os.path.join(abs_dir, filename)
 
-    with Image.open(abs_source) as img:
-        img = ImageOps.exif_transpose(img)
-        img.thumbnail((150, 150), Image.LANCZOS)
-        img.save(abs_thumb)
+    try:
+        with Image.open(abs_source) as img:
+            img = ImageOps.exif_transpose(img)
+            img.thumbnail((150, 150), Image.LANCZOS)
+            img.save(abs_thumb)
+    except Exception:
+        logger.warning("No se pudo generar miniatura de %s", source_path, exc_info=True)
+        if os.path.exists(abs_thumb):
+            os.remove(abs_thumb)
+        raise HTTPException(status_code=400, detail="No se pudo procesar la imagen.")
 
     return relative_path
+
+
+def save_photo_with_thumbnail(file: UploadFile, subdir: str) -> tuple[str, str]:
+    photo_path = save_photo(file, subdir)
+    try:
+        thumbnail_path = generate_thumbnail(photo_path, subdir)
+    except HTTPException:
+        delete_photo(photo_path, photo_path)
+        raise
+    return photo_path, thumbnail_path
 
 
 def delete_photo(photo_path: str, thumbnail_path: str) -> None:
@@ -139,6 +166,9 @@ def delete_photo(photo_path: str, thumbnail_path: str) -> None:
         os.remove(abs_thumb)
 
 
+ORPHAN_GRACE_SECONDS = 60
+
+
 async def clean_orphans(db: AsyncSession) -> None:
     valid_paths: set[str] = set()
     valid_thumbnails: set[str] = set()
@@ -149,20 +179,29 @@ async def clean_orphans(db: AsyncSession) -> None:
         result = await db.execute(select(model.thumbnail_path))
         valid_thumbnails.update(row[0] for row in result)
 
+    # Gracia: un archivo recién escrito aún no tiene fila en BD (subida en curso).
+    now = time.time()
+
     for root, _dirs, files in os.walk(settings.UPLOAD_DIR):
         for filename in files:
             if filename == 'QR.png':
                 continue
             full_path = os.path.join(root, filename)
+            if now - os.path.getmtime(full_path) < ORPHAN_GRACE_SECONDS:
+                continue
             rel_path = os.path.relpath(full_path, settings.UPLOAD_DIR)
             if rel_path not in valid_paths:
+                logger.info("Eliminando archivo huérfano: %s", rel_path)
                 os.remove(full_path)
 
     for root, _dirs, files in os.walk(settings.THUMBNAILS_DIR):
         for filename in files:
             full_path = os.path.join(root, filename)
+            if now - os.path.getmtime(full_path) < ORPHAN_GRACE_SECONDS:
+                continue
             rel_path = os.path.relpath(full_path, settings.THUMBNAILS_DIR)
             if rel_path not in valid_thumbnails:
+                logger.info("Eliminando miniatura huérfana: %s", rel_path)
                 os.remove(full_path)
 
 

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -22,6 +23,9 @@ from app.routers.fotografo_secreto import secret_router
 from app.routers.admin import admin_router
 from app.routers.sse import sse_router
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger(__name__)
+
 
 orphan_task: asyncio.Task | None = None
 
@@ -33,7 +37,7 @@ async def orphan_cleanup_loop():
             async with SessionLocal() as db:
                 await clean_orphans(db)
         except Exception:
-            pass
+            logger.warning("Limpieza de huérfanos falló", exc_info=True)
 
 
 async def _column_notnull(name):
@@ -193,6 +197,7 @@ app.add_middleware(
     session_cookie="session",
     max_age=86400,
     same_site="lax",
+    https_only=settings.FRONTEND_URL.startswith("https"),
 )
 
 app.include_router(auth_router)

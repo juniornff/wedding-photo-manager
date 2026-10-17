@@ -1,4 +1,6 @@
 import hashlib
+import hmac
+import secrets
 import uuid
 
 from sqlalchemy import select
@@ -7,13 +9,33 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.models import User
 from app.config import settings, get_admin_emails, get_admin_password
 
+PBKDF2_ITERATIONS = 260000
+PBKDF2_PREFIX = "pbkdf2_sha256"
+
 
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), PBKDF2_ITERATIONS)
+    return f"{PBKDF2_PREFIX}${PBKDF2_ITERATIONS}${salt}${digest.hex()}"
+
+
+def _verify_legacy_sha256(password: str, password_hash: str) -> bool:
+    return hmac.compare_digest(hashlib.sha256(password.encode()).hexdigest(), password_hash)
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    return hash_password(password) == password_hash
+    if password_hash.startswith(f"{PBKDF2_PREFIX}$"):
+        try:
+            _, iterations, salt, digest = password_hash.split("$")
+            expected = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), int(iterations))
+        except (ValueError, TypeError):
+            return False
+        return hmac.compare_digest(expected.hex(), digest)
+    return _verify_legacy_sha256(password, password_hash)
+
+
+def needs_rehash(password_hash: str) -> bool:
+    return not password_hash.startswith(f"{PBKDF2_PREFIX}$")
 
 
 async def create_guest(db: AsyncSession, alias: str) -> User:

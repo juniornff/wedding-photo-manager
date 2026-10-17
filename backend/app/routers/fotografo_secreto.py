@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -15,7 +16,12 @@ from app.schemas.schemas import (
     PhotographerDashboardResponse,
     MyTableResponse,
 )
-from app.services.photo_service import validate_file, save_photo, generate_thumbnail, check_rate_limit
+from app.services.photo_service import (
+    validate_file,
+    save_photo_with_thumbnail,
+    delete_photo,
+    check_rate_limit,
+)
 from app.services.sse_manager import sse_manager
 from app.config import settings
 
@@ -303,11 +309,12 @@ async def upload_challenge_photo(
         )
 
     validate_file(file)
-    message = message.strip()[:150] if message and message.strip() else None
+    message = message.strip() if message and message.strip() else None
+    if message and len(message) > 150:
+        raise HTTPException(status_code=400, detail="El mensaje no puede exceder 150 caracteres.")
 
     table_dir = f"Fotografo-Secreto/Mesa-{challenge.table_id:02d}"
-    photo_path = save_photo(file, table_dir)
-    thumbnail_path = generate_thumbnail(photo_path, table_dir)
+    photo_path, thumbnail_path = save_photo_with_thumbnail(file, table_dir)
 
     challenge_photo = ChallengePhoto(
         uuid=photo_path.split("/")[-1].split(".")[0],
@@ -318,7 +325,12 @@ async def upload_challenge_photo(
         user_id=user_id,
     )
     db.add(challenge_photo)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        delete_photo(photo_path, photo_path)
+        raise HTTPException(status_code=409, detail="Ya subiste una foto a este reto.")
     await db.refresh(challenge_photo)
 
     await sse_manager.broadcast("new_challenge_photo", {
