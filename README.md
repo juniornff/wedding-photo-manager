@@ -16,7 +16,7 @@ Aplicación web para gestionar fotos de bodas: subida, visualización y descarga
 | Almacenamiento | Local filesystem (`Fotos/`, `Miniaturas/`), SQLite en `data/wedding.db` |
 | Autenticación | Google OAuth + UUID anónimo (localStorage) |
 | Despliegue | Docker Compose (backend + frontend); Caddy + Cloudflare en producción |
-| Testing | Sin suites por el momento |
+| Testing | pytest (backend, 173 tests) + Vitest/RTL (frontend, 77 tests) + CI en GitHub Actions |
 
 ---
 
@@ -750,6 +750,19 @@ El **frontend** recibe `VITE_PROXY_TARGET` (target del proxy `/api` de Vite; en 
 - **Páginas legales OAuth** (`/privacidad` y `/terminos`, públicas y con los nombres de los novios vía `GET /api/wedding-info`): Google las exige (Política de Privacidad y Condiciones, enlazadas desde la homepage) en el OAuth consent screen de apps que usan OAuth. Registrar en la consola de Google las URLs `https://boda.nehemiasfeliz.com/privacidad` y `.../terminos`
 - Para correr el backend local fuera de Docker: `uvicorn app.main:app --reload --app-dir backend` desde la raíz del repo (el `.env` raíz se lee por ruta absoluta; `Fotos/`, `Miniaturas/` y `data/` se crean relativos al CWD).
 - Dev frontend: `npm run dev` en `frontend/` (Vite proxya `/api` → `VITE_PROXY_TARGET` o `http://localhost:8000` por defecto).
+
+---
+
+## Tests
+
+| Suite | Comando | Alcance |
+|---|---|---|
+| Backend | `cd backend && python -m pytest -q` (173) | servicios (validación/miniaturas/HEIC/ZIP/rate-limit, auth, SSE), APIs (galería, auth+guards, admin, fotógrafo secreto), Drive (refresh/dedupe/lotes/endpoints) y migraciones del lifespan |
+| Frontend | `cd frontend && npm test` (77) | `utils`/`api`/hooks (`usePhotoSelection`, `useLongPress`) y componentes (`SelectionToolbar`, `DownloadDialog`, `PhotoUpload`, `Toaster`) |
+| Lint/build | `npm run lint` · `npm run build` | oxlint + build de producción |
+
+- La suite de backend es **autocontenida**: `tests/conftest.py` fija BD/carpetas temporales y credenciales falsas antes de importar la app (no requiere `.env` ni toca `data/`, `Fotos/` ni `Miniaturas/` reales).
+- **CI** (`.github/workflows/ci.yml`): en cada push/PR a `master` corren en paralelo pytest (Python 3.13) y lint+test+build del frontend (Node 20).
 
 ---
 

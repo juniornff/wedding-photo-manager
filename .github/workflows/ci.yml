@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main, 'test/**']
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Suite de tests
+        run: python -m pytest -q
+        # La suite es autocontenida: tests/conftest.py fija un entorno de
+        # prueba (BD/carpetas temporales, credenciales falsas) antes de
+        # importar la app, así que no requiere .env ni secretos.
+
+  frontend:
+    name: Frontend (Vitest + oxlint + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Instalar dependencias
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Tests
+        run: npm test
+      - name: Build
+        run: npm run build

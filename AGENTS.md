@@ -9,11 +9,15 @@ Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. 
 - **Frontend dev:** `npm run dev` from `frontend/` — Vite proxies `/api` → `VITE_PROXY_TARGET` (default `http://localhost:8000`)
 - **Frontend lint:** `npm run lint` (oxlint, config in `.oxlintrc.json` — not ESLint). No typecheck script
 - **Prod deploy:** `docker compose up -d --build` on the home server (there `docker-compose.prod.yml` del repo está desplegado con el nombre `docker-compose.yml`; ver `DEPLOY.md`). Caddy block in `Caddyfile.md`
-- **Testing:** none yet. No pytest/vitest suites, no `test` scripts
+- **Testing backend:** `cd backend && python -m pytest -q` (173 tests; usa el venv del repo si existe: `.venv/bin/python -m pytest -q`). Suite autocontenida: `tests/conftest.py` fija env de prueba (BD/carpetas temporales, credenciales falsas) **antes** de importar `app.*` y funciona sin `.env` (verificado, es lo que corre CI)
+- **Testing frontend:** `npm test` en `frontend/` (Vitest + jsdom + RTL; 77 tests) — también `npm run lint` (oxlint) y `npm run build`
+- **CI:** `.github/workflows/ci.yml` — 2 jobs en paralelo (backend: Python 3.13 + pip cache + pytest; frontend: Node 20 + npm ci + lint + test + build), en push a `master`/`main`/`test/**` y PRs a `master`/`main`
+- **Testing:** suites activas (pytest backend + Vitest frontend). Sin coverage gates
 
 ## Tech stack
 - **Backend:** FastAPI + SQLAlchemy (async) + SQLite (WAL) + pydantic-settings; libs Pillow (miniaturas caja 150×150) + pillow-heif (HEIC→JPEG), Authlib (Google OAuth), qrcode (table QRs)
 - **Frontend:** React 19 + Vite + Tailwind v4 + React Router; native `fetch` + React Context (no axios/Redux); SSE client
+- **Testing:** backend pytest 9 + pytest-asyncio (auto mode) + respx (mock httpx/Drive); frontend Vitest 5 + @testing-library/react/jest-dom/user-event + jsdom **26** (¡no 30!: undici 8 rompe en Node 20 por `zlib.createZstdDecompress`)
 - **Storage:** local filesystem `Fotos/` + `Miniaturas/` (mirrored structure); SQLite at `data/wedding.db` (path relative to CWD; `/app/data` in container)
 - **Auth:** Google OAuth (admin session cookie + guest identity recovery); anonymous guests via server-generated UUID stored in localStorage
 - **Deployment:** Docker Compose (backend + frontend); Caddy + Cloudflare en producción
@@ -117,7 +121,14 @@ Contextos divididos en 3 archivos cada uno (patrón canónico fast-refresh; lint
 ## Database entities
 Canonical ER diagram in `README.md`. Summary: **User** (anonymous uuid+alias or Google-authenticated; `table_id` set once; `google_name`, `google_photo`, `google_refresh_token` para Drive; administradores con `email`+`password_hash`+`role='admin'`), **WeddingInfo** (couple names, date, color scheme, `winner_table_id`, `carousel_interval`), **CarouselPhoto**, **GalleryPhoto**, **Table** (unique QR links), **Challenge** (retos por mesa, cantidad libre, `locked` flag), **ChallengePhoto** (1/user/reto, `message` field, `UniqueConstraint(challenge_id, user_id)`).
 
-## Conventions
+## Testing suite (convenciones)
+- **Backend** (`backend/tests/`): `conftest.py` (fixtures + aislamiento), `helpers.py` (constantes/factories), `test_smoke`, `test_photo_service`, `test_auth_service`, `test_sse_manager`, `test_main_api`, `test_auth_api`, `test_admin_api`, `test_secret_photographer`, `test_drive`, `test_migrations`
+- **Regla de oro: NUNCA `from tests.conftest import ...` desde un test** — Python lo re-importa como módulo distinto (`tests.conftest`), re-ejecutando `mkdtemp`/`os.environ.update` con valores nuevos: `settings` y el env quedarían apuntando a directorios distintos y los tests fallarían de formas confusas. Lo que esté compartido vive en `helpers.py` (módulo puro, sin side effects); los tests importan `from helpers import ...`
+- `conftest.py` fija `DATABASE_URL`/`UPLOAD_DIR`/`ADMIN_*` de prueba **antes** de importar `app.*` (singletons `settings`/`engine`); cada test arranca con `db_reset` (drop/create + `init_admin`/`init_wedding_info` + `engine.dispose()`). Nunca toca `data/wedding.db`, `Fotos/` ni `Miniaturas/` reales
+- Endpoints se prueban con `httpx.AsyncClient(transport=ASGITransport(app))` (fixture `client`/`admin_client`), Drive con `respx` (router con `assert_all_called=False` cuando no se usan todas las rutas del flujo), SSE con el spy `sse_spy`
+- **Frontend** (`frontend/src/`): tests junto al archivo (`*.test.js`/`*.jsx`); imports explícitos de `vitest` (sin globals, para que oxlint no queje); mocks de `../api`/`../context/useAuth`/`../driveJobs` con `vi.mock`; el long-press de selección debe probarse como lo usa la UI real (`enter()` + `toggle(id)` en el **mismo** `act`)
+
+
 - `README.md` is the canonical architecture reference with Mermaid diagrams
 - `plan.md` is the original specification
 - This file (AGENTS.md) is the quick-start for new agent sessions
