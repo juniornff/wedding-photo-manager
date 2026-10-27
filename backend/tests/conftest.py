@@ -15,6 +15,8 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from helpers import TEST_ADMIN_EMAIL, TEST_ADMIN_PASSWORD, make_image_dict
+
 # ---------------------------------------------------------------------------
 # Entorno de prueba (antes de importar app.*)
 # ---------------------------------------------------------------------------
@@ -26,8 +28,8 @@ os.environ.update(
         "DATABASE_URL": f"sqlite+aiosqlite:///{_TEST_ROOT}/wedding-test.db",
         "UPLOAD_DIR": str(Path(_TEST_ROOT) / "Fotos"),
         "THUMBNAILS_DIR": str(Path(_TEST_ROOT) / "Miniaturas"),
-        "ADMIN_EMAIL": "admin@test.local",
-        "ADMIN_PASSWORD": "admin-test-pass",
+        "ADMIN_EMAIL": TEST_ADMIN_EMAIL,
+        "ADMIN_PASSWORD": TEST_ADMIN_PASSWORD,
         "NOVIO_EMAIL": "novio@test.local",
         "NOVIO_PASSWORD": "novio-test-pass",
         "NOVIA_EMAIL": "novia@test.local",
@@ -45,8 +47,6 @@ import httpx  # noqa: E402
 import pytest  # noqa: E402
 from PIL import Image  # noqa: E402
 
-from helpers import make_image_dict  # noqa: E402
-
 from app.config import settings  # noqa: E402
 from app.database import SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
@@ -55,8 +55,6 @@ from app.services import photo_service  # noqa: E402
 from app.services.auth_service import init_admin, init_wedding_info  # noqa: E402
 from app.services.sse_manager import sse_manager  # noqa: E402
 
-TEST_ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
-TEST_ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 TEST_ROOT = _TEST_ROOT
 
 
@@ -135,6 +133,44 @@ async def create_guest(client):
         return res.json()
 
     return _create
+
+
+# ---------------------------------------------------------------------------
+# Factories directas en BD (mesas/retos) para ensamblar escenarios
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def make_table(db):
+    import uuid as _uuid
+
+    from app.models.models import Table
+
+    async def _make(name: str = "Mesa 1"):
+        table = Table(name=name, qr_code=str(_uuid.uuid4()))
+        db.add(table)
+        await db.commit()
+        await db.refresh(table)
+        return table
+
+    return _make
+
+
+@pytest.fixture
+def make_challenge(db):
+    from app.models.models import Challenge
+
+    async def _make(table, description: str = "Reto 1", sort_order: int = 0, locked: bool = False):
+        challenge = Challenge(
+            table_id=table.id,
+            description=description,
+            sort_order=sort_order,
+            locked=locked,
+        )
+        db.add(challenge)
+        await db.commit()
+        await db.refresh(challenge)
+        return challenge
+
+    return _make
 
 
 # ---------------------------------------------------------------------------

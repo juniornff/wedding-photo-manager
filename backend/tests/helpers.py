@@ -9,6 +9,10 @@ import io
 
 from starlette.datastructures import Headers, UploadFile
 
+# Credenciales del admin de prueba (el conftest las inyecta como env).
+TEST_ADMIN_EMAIL = "admin@test.local"
+TEST_ADMIN_PASSWORD = "admin-test-pass"
+
 IMAGE_EXTS = {
     "JPEG": (".jpg", "image/jpeg"),
     "PNG": (".png", "image/png"),

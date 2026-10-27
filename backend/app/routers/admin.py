@@ -150,13 +150,14 @@ async def upload_carousel_photo(
     photo_path, thumbnail_path = await run_in_threadpool(save_photo_with_thumbnail, file, "Carrucel")
 
     result = await db.execute(select(func.max(CarouselPhoto.sort_order)))
-    max_order = result.scalar() or -1
+    max_order = result.scalar()
+    next_order = 0 if max_order is None else max_order + 1
 
     carousel_photo = CarouselPhoto(
         uuid=photo_path.split("/")[-1].split(".")[0],
         path=photo_path,
         thumbnail_path=thumbnail_path,
-        sort_order=max_order + 1,
+        sort_order=next_order,
     )
     db.add(carousel_photo)
     await db.commit()
