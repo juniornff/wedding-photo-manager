@@ -45,6 +45,8 @@ import httpx  # noqa: E402
 import pytest  # noqa: E402
 from PIL import Image  # noqa: E402
 
+from helpers import make_image_dict  # noqa: E402
+
 from app.config import settings  # noqa: E402
 from app.database import SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
@@ -138,23 +140,10 @@ async def create_guest(client):
 # ---------------------------------------------------------------------------
 # Datos de prueba: imágenes
 # ---------------------------------------------------------------------------
-_IMAGE_EXTS = {
-    "JPEG": (".jpg", "image/jpeg"),
-    "PNG": (".png", "image/png"),
-    "GIF": (".gif", "image/gif"),
-    "WEBP": (".webp", "image/webp"),
-    "BMP": (".bmp", "image/bmp"),
-    "TIFF": (".tiff", "image/tiff"),
-}
-
-
 @pytest.fixture
 def make_image():
     def _make(fmt: str = "JPEG", size=(800, 600), color="red") -> dict:
-        buf = io.BytesIO()
-        Image.new("RGB", size, color).save(buf, format=fmt)
-        ext, content_type = _IMAGE_EXTS[fmt]
-        return {"filename": f"test{ext}", "content": buf.getvalue(), "content_type": content_type}
+        return make_image_dict(fmt, size, color)
 
     return _make
 
@@ -180,9 +169,12 @@ def heic_bytes():
     return b"\x00\x00\x00\x18ftypheic" + b"\x00" * 64
 
 
-def make_upload_file(image: dict) -> tuple:
-    """Empaqueta un dict de make_image/make_heic como campo `file` de httpx."""
-    return ("file", (image["filename"], image["content"], image["content_type"]))
+@pytest.fixture
+def upload_file():
+    """Factory de UploadFile de starlette para tests unitarios."""
+    from helpers import upload_file as _impl
+
+    return _impl
 
 
 # ---------------------------------------------------------------------------
