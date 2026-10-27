@@ -6,7 +6,7 @@ import uuid
 import zipfile
 from pathlib import Path
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import UploadFile, HTTPException
@@ -239,7 +239,7 @@ async def clean_orphans(db: AsyncSession) -> None:
 
 
 def check_rate_limit(user_id: int) -> None:
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     cutoff = now - timedelta(minutes=1)
     timestamps = _upload_timestamps[user_id]
     _upload_timestamps[user_id] = [t for t in timestamps if t > cutoff]
