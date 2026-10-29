@@ -16,7 +16,7 @@ Aplicación web para gestionar fotos de bodas: subida, visualización y descarga
 | Almacenamiento | Local filesystem (`Fotos/`, `Miniaturas/`), SQLite en `data/wedding.db` |
 | Autenticación | Google OAuth + UUID anónimo (localStorage) |
 | Despliegue | Docker Compose (backend + frontend); Caddy + Cloudflare en producción |
-| Testing | pytest (backend, 173 tests) + Vitest/RTL (frontend, 77 tests) + CI en GitHub Actions |
+| Testing | pytest (backend, 174 tests) + Vitest/RTL (frontend, 77 tests) + CI/CD en GitHub Actions (tests + imágenes GHCR) |
 
 ---
 
@@ -744,9 +744,9 @@ El **frontend** recibe `VITE_PROXY_TARGET` (target del proxy `/api` de Vite; en 
 
 ## Puesta en marcha
 
-- `docker compose up --build` levanta backend y frontend (**LAN/dev**). El frontend usa **API relativa**: Vite proxya `/api/*` al backend `http://backend:8000` (env `VITE_PROXY_TARGET`), por lo que la misma web funciona en `localhost` y en cualquier IP/Máquina de la red (`FRONTEND_URL` controla CORS y redirects OAuth).
+- **Desarrollo (LAN):** `docker compose -f docker-compose.dev.yml up --build` levanta backend y frontend desde el código fuente (`Dockerfile.dev`). El frontend usa **API relativa**: Vite proxya `/api/*` al backend `http://backend:8000` (env `VITE_PROXY_TARGET`), por lo que la misma web funciona en `localhost` y en cualquier IP/Máquina de la red (`FRONTEND_URL` controla CORS y redirects OAuth).
 - Host LAN: backend publicado en **`localhost:8001`** (→ contenedor `:8000`), frontend en `0.0.0.0:5173` (accesible desde otros dispositivos vía `http://<IP>:5173`). Vite acepta cualquier Host (`allowedHosts`).
-- Para **producción** (Caddy + Cloudflare): en el servidor el compose prod está desplegado con el nombre `docker-compose.yml` → `docker compose up -d --build`; el archivo del repo `docker-compose.prod.yml` se renombra allí (el rsync de `DEPLOY.md` lo excluye para no pisarlo). Sin puertos de host, frontend y backend en la red externa `proxy-net` para que Caddy los alcance. Bloque de Caddy en `Caddyfile.md`; guía de actualización en `DEPLOY.md`.
+- **Despliegue (imágenes GHCR):** el workflow `cd.yml` publica en cada push a `master` (y tag `v*`) las imágenes `ghcr.io/juniornff/wedding-photo-manager-backend|-frontend` con tags `latest` + `sha-…` (+ versión desde tags `vX.Y.Z`), solo si los tests pasan. Donde se vaya a levantar: `docker login ghcr.io` (PAT con `read:packages`) y `docker compose up -d` — el `docker-compose.yml` (por defecto) solo hace **pull** de esas imágenes (frontend en `:8080`, con nginx de producción: SPA + proxy `/api` y SSE sin buffering). Versiones: `TAG=latest` en `.env` o `TAG=<sha|X.Y.Z>` para rollback.
 - **Páginas legales OAuth** (`/privacidad` y `/terminos`, públicas y con los nombres de los novios vía `GET /api/wedding-info`): Google las exige (Política de Privacidad y Condiciones, enlazadas desde la homepage) en el OAuth consent screen de apps que usan OAuth. Registrar en la consola de Google las URLs `https://boda.nehemiasfeliz.com/privacidad` y `.../terminos`
 - Para correr el backend local fuera de Docker: `uvicorn app.main:app --reload --app-dir backend` desde la raíz del repo (el `.env` raíz se lee por ruta absoluta; `Fotos/`, `Miniaturas/` y `data/` se crean relativos al CWD).
 - Dev frontend: `npm run dev` en `frontend/` (Vite proxya `/api` → `VITE_PROXY_TARGET` o `http://localhost:8000` por defecto).
@@ -757,12 +757,13 @@ El **frontend** recibe `VITE_PROXY_TARGET` (target del proxy `/api` de Vite; en 
 
 | Suite | Comando | Alcance |
 |---|---|---|
-| Backend | `cd backend && python -m pytest -q` (173) | servicios (validación/miniaturas/HEIC/ZIP/rate-limit, auth, SSE), APIs (galería, auth+guards, admin, fotógrafo secreto), Drive (refresh/dedupe/lotes/endpoints) y migraciones del lifespan |
+| Backend | `cd backend && python -m pytest -q` (174) | servicios (validación/miniaturas/HEIC/ZIP/rate-limit, auth, SSE), APIs (galería, auth+guards, admin, fotógrafo secreto), Drive (refresh/dedupe/lotes/endpoints) y migraciones del lifespan |
 | Frontend | `cd frontend && npm test` (77) | `utils`/`api`/hooks (`usePhotoSelection`, `useLongPress`) y componentes (`SelectionToolbar`, `DownloadDialog`, `PhotoUpload`, `Toaster`) |
 | Lint/build | `npm run lint` · `npm run build` | oxlint + build de producción |
 
 - La suite de backend es **autocontenida**: `tests/conftest.py` fija BD/carpetas temporales y credenciales falsas antes de importar la app (no requiere `.env` ni toca `data/`, `Fotos/` ni `Miniaturas/` reales).
-- **CI** (`.github/workflows/ci.yml`): en cada push/PR a `master` corren en paralelo pytest (Python 3.13) y lint+test+build del frontend (Node 20).
+- **CI** (`.github/workflows/ci.yml`): en cada PR a `master`/`main` y push a `test/**` corren en paralelo pytest (Python 3.13) y lint+test+build del frontend (Node 20).
+- **CD** (`.github/workflows/cd.yml`): en cada push a `master` o tag `v*` corre los mismos tests y, si pasan, construye y publica las imágenes Docker en GHCR (tags `latest`, `sha-…` y versión semver).
 
 ---
 
@@ -781,6 +782,7 @@ El **frontend** recibe `VITE_PROXY_TARGET` (target del proxy `/api` de Vite; en 
 | Config | pydantic-settings |
 | Tiempo real | SSE (`new_photo`, `new_challenge_photo`, `challenge_photo_deleted`, `gallery_photo_deleted`, `carousel_updated`, `info_updated`, `winner_selected`) |
 | Visualización de fotos | Componente compartido `PhotoLightbox` (lightbox + descarga, opcional eliminar) |
-| Entorno dev | `docker compose up --build` |
+| Entorno dev | `docker compose -f docker-compose.dev.yml up --build` |
+| Entorno despliegue | `docker compose up -d` (pull de imágenes GHCR) |
 | Python | Última versión estable |
 | Node | Última versión estable |

@@ -1,17 +1,18 @@
 # AGENTS.md — Wedding Photo Manager
 
 ## Project status
-Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. Run everything with `docker compose up` (backend :8001→:8000 in container, frontend exposed on host :5173). `README.md` is the canonical architecture reference (Mermaid ER/use-case/sequence/state/component diagrams); `plan.md` is the original spec.
+Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. Run dev with `docker compose -f docker-compose.dev.yml up` (backend :8001→:8000 in container, frontend exposed on host :5173); deploy with `docker compose up -d` (pull de imágenes GHCR). `README.md` is the canonical architecture reference (Mermaid ER/use-case/sequence/state/component diagrams); `plan.md` is the original spec.
 
 ## Commands
-- **Run stack:** `docker compose up` — mounts root `Fotos/`, `Miniaturas/` and `data/` into the backend container. Use `docker compose up -d --build` after changing `.env` (no need to rebuild for `.env` changes: Compose injects env vars at container start)
+- **Run stack (dev):** `docker compose -f docker-compose.dev.yml up` — mounts root `Fotos/`, `Miniaturas/` and `data/` into the backend container. Use `docker compose -f docker-compose.dev.yml up -d` after changing `.env` (no need to rebuild for `.env` changes: Compose injects env vars at container start)
 - **Backend local:** `uvicorn app.main:app --reload --app-dir backend` desde la raíz del repo (`config.py` lee el `.env` raíz por ruta absoluta; `Fotos/`, `Miniaturas/` y `data/` son relativos al CWD, así que correr desde `backend/` crearía dirs ahí)
 - **Frontend dev:** `npm run dev` from `frontend/` — Vite proxies `/api` → `VITE_PROXY_TARGET` (default `http://localhost:8000`)
 - **Frontend lint:** `npm run lint` (oxlint, config in `.oxlintrc.json` — not ESLint). No typecheck script
-- **Prod deploy:** `docker compose up -d --build` on the home server (there `docker-compose.prod.yml` del repo está desplegado con el nombre `docker-compose.yml`; ver `DEPLOY.md`). Caddy block in `Caddyfile.md`
-- **Testing backend:** `cd backend && python -m pytest -q` (173 tests; usa el venv del repo si existe: `.venv/bin/python -m pytest -q`). Suite autocontenida: `tests/conftest.py` fija env de prueba (BD/carpetas temporales, credenciales falsas) **antes** de importar `app.*` y funciona sin `.env` (verificado, es lo que corre CI)
+- **Prod deploy (GHCR):** el workflow `cd.yml` publica `ghcr.io/juniornff/wedding-photo-manager-backend|-frontend` en cada push a `master` o tag `v*` (tags `latest` + `sha-…` + semver; solo si pasan los tests). Levantar con `docker compose up -d` (el `docker-compose.yml` por defecto es el de despliegue: solo pull, frontend nginx en `:8080` con SPA + proxy `/api`/SSE). Requiere `docker login ghcr.io` con PAT `read:packages`; rollback vía `TAG=<sha|X.Y.Z>` en `.env`
+- **Testing backend:** `cd backend && python -m pytest -q` (174 tests; usa el venv del repo si existe: `.venv/bin/python -m pytest -q`). Suite autocontenida: `tests/conftest.py` fija env de prueba (BD/carpetas temporales, credenciales falsas) **antes** de importar `app.*` y funciona sin `.env` (verificado, es lo que corre CI)
 - **Testing frontend:** `npm test` en `frontend/` (Vitest + jsdom + RTL; 77 tests) — también `npm run lint` (oxlint) y `npm run build`
-- **CI:** `.github/workflows/ci.yml` — 2 jobs en paralelo (backend: Python 3.13 + pip cache + pytest; frontend: Node 20 + npm ci + lint + test + build), en push a `master`/`main`/`test/**` y PRs a `master`/`main`
+- **CI:** `.github/workflows/ci.yml` — 2 jobs en paralelo (backend: Python 3.13 + pip cache + pytest; frontend: Node 20 + npm ci + lint + test + build), en PRs a `master`/`main` y pushes a `test/**`
+- **CD:** `.github/workflows/cd.yml` — en push a `master`/tags `v*` (o `workflow_dispatch`): mismos tests (gating: si fallan no publica) + build/push de las 2 imágenes Docker a GHCR con tags `latest`, `sha-…` y versión semver (`docker/metadata-action` + cache GHA por capa)
 - **Testing:** suites activas (pytest backend + Vitest frontend). Sin coverage gates
 
 ## Tech stack
@@ -23,7 +24,7 @@ Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. 
 - **Deployment:** Docker Compose (backend + frontend); Caddy + Cloudflare en producción
 
 ## Env loading (.env)
-- Root `.env` is the **single** source of config values (not versioned). **No `.env.example`** exists, y **no se monta dentro de los contenedores**: cada docker-compose (`docker-compose.yml` y `docker-compose.prod.yml`) reinyecta en el contenedor **solo las variables que necesita cada servicio**, interpoladas desde el `.env` raíz vía `environment:` (`.env` → Compose → env vars del contenedor). Así ningún contenedor ve secretos que no le corresponden.
+- Root `.env` is the **single** source of config values (not versioned). **No `.env.example`** exists, y **no se monta dentro de los contenedores**: cada docker-compose (`docker-compose.yml` de despliegue y `docker-compose.dev.yml` de desarrollo) reinyecta en el contenedor **solo las variables que necesita cada servicio**, interpoladas desde el `.env` raíz vía `environment:` (`.env` → Compose → env vars del contenedor). Así ningún contenedor ve secretos que no le corresponden. La var `TAG` (default `latest`) elige la versión de imagen en el compose de despliegue
 - `backend/app/config.py` reads env_file from **one** candidate: the repo root `.env` (missing files are ignored) — makes local runs outside Docker work
 - Real environment variables take precedence over dotenv files (pydantic-settings); en Docker mandan las env vars inyectadas por Compose y en local el `.env` raíz. `Settings` uses `extra="ignore"` so unknown vars are tolerated
 - Vars del backend declaradas en Compose: `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `NOVIO_EMAIL`, `NOVIO_PASSWORD`, `NOVIA_EMAIL`, `NOVIA_PASSWORD`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SECRET_KEY`, `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`, `PYTHONUNBUFFERED`. El frontend solo recibe `VITE_PROXY_TARGET`

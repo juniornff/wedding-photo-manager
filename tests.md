@@ -8,7 +8,7 @@ La suite tiene dos mitades, cada una con su herramienta:
 
 | Mitad | Herramienta | Qué prueba | Cantidad |
 |---|---|---|---|
-| Backend (`backend/tests/`) | **pytest** (+ pytest-asyncio, respx) | Servicios, endpoints, migraciones | **173** |
+| Backend (`backend/tests/`) | **pytest** (+ pytest-asyncio, respx) | Servicios, endpoints, migraciones | **174** |
 | Frontend (`frontend/src/`) | **Vitest** (+ Testing Library, jsdom) | Utilidades, hooks, componentes | **77** |
 
 **Total: 250 tests.** No requieren `.env` ni levantar el stack (ver [Cómo funcionan](#cómo-funcionan)).
@@ -17,7 +17,7 @@ La suite tiene dos mitades, cada una con su herramienta:
 
 ## Cómo ejecutarlos
 
-### Backend — 173 tests
+### Backend — 174 tests
 
 ```bash
 cd backend
@@ -102,7 +102,7 @@ La suite **nunca toca** `data/wedding.db`, `Fotos/`, `Miniaturas/` ni el `.env` 
 
 ## Qué cubre cada archivo
 
-### Backend (`backend/tests/`) — 173
+### Backend (`backend/tests/`) — 174
 
 | Archivo | Tests | Cubre |
 |---|---:|---|
@@ -132,16 +132,18 @@ La suite **nunca toca** `data/wedding.db`, `Fotos/`, `Miniaturas/` ni el `.env` 
 
 ---
 
-## Integración continua (CI)
+## Integración continua (CI/CD)
 
-`.github/workflows/ci.yml` ejecuta en paralelo, en cada **push** a `master`/`main`/`test/**` y en cada **PR** a `master`/`main`:
+**CI** — `.github/workflows/ci.yml`, en cada **PR** a `master`/`main` y cada push a `test/**`, en paralelo:
 
 | Job | Entorno | Pasos |
 |---|---|---|
 | `backend` | Ubuntu + Python 3.13 (cache pip) | `pip install -r requirements.txt -r requirements-dev.txt` → `pytest -q` |
 | `frontend` | Ubuntu + Node 20 (cache npm) | `npm ci` → `npm run lint` → `npm test` → `npm run build` |
 
-El job de backend no necesita secretos ni `.env`: la suite es autocontenida (ver arriba).
+**CD** — `.github/workflows/cd.yml`, en cada **push a `master`** o **tag `v*`** (o `workflow_dispatch`): corre los mismos `backend-tests` + `frontend-tests` (gating: si fallan no se publica nada) y después el job `images` construye y sube las 2 imágenes Docker a GHCR (`ghcr.io/juniornff/wedding-photo-manager-backend|-frontend`) con tags `latest`, `sha-…` y versión semver desde tags `vX.Y.Z` (cache GHA por capa).
+
+El job de backend no necesita secretos ni `.env`: la suite es autocontenida (ver arriba). El push de imágenes usa el `GITHUB_TOKEN` del workflow (no hay secretos manuales).
 
 ---
 
