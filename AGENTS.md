@@ -1,7 +1,7 @@
 # AGENTS.md — Wedding Photo Manager
 
 ## Project status
-Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. Run dev with `docker compose -f docker-compose.dev.yml up` (backend :8001→:8000 in container, frontend exposed on host :5173); deploy with `docker compose up -d` (pull de imágenes GHCR). `README.md` is the canonical architecture reference (Mermaid ER/use-case/sequence/state/component diagrams); `plan.md` is the original spec.
+Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. Run dev with `docker compose -f docker-compose.dev.yml up` (backend :8001→:8000 in container, frontend exposed on host :5173); deploy with `docker compose up -d` (pull de imágenes GHCR). `README.md` (inglés) y `README.es.md` (español) son la referencia canónica de arquitectura (diagramas Mermaid ER/use-case/sequence/state/component).
 
 ## Commands
 - **Run stack (dev):** `docker compose -f docker-compose.dev.yml up` — mounts root `Fotos/`, `Miniaturas/` and `data/` into the backend container. Use `docker compose -f docker-compose.dev.yml up -d` after changing `.env` (no need to rebuild for `.env` changes: Compose injects env vars at container start)
@@ -21,10 +21,10 @@ Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. 
 - **Testing:** backend pytest 9 + pytest-asyncio (auto mode) + respx (mock httpx/Drive); frontend Vitest 5 + @testing-library/react/jest-dom/user-event + jsdom **26** (¡no 30!: undici 8 rompe en Node 20 por `zlib.createZstdDecompress`)
 - **Storage:** local filesystem `Fotos/` + `Miniaturas/` (mirrored structure); SQLite at `data/wedding.db` (path relative to CWD; `/app/data` in container)
 - **Auth:** Google OAuth (admin session cookie + guest identity recovery); anonymous guests via server-generated UUID stored in localStorage
-- **Deployment:** Docker Compose (backend + frontend); Caddy + Cloudflare en producción
+- **Deployment:** Docker Compose; producción = imágenes GHCR construidas por `cd.yml` (frontend sirve nginx: SPA + proxy `/api`/SSE)
 
 ## Env loading (.env)
-- Root `.env` is the **single** source of config values (not versioned). **No `.env.example`** exists, y **no se monta dentro de los contenedores**: cada docker-compose (`docker-compose.yml` de despliegue y `docker-compose.dev.yml` de desarrollo) reinyecta en el contenedor **solo las variables que necesita cada servicio**, interpoladas desde el `.env` raíz vía `environment:` (`.env` → Compose → env vars del contenedor). Así ningún contenedor ve secretos que no le corresponden. La var `TAG` (default `latest`) elige la versión de imagen en el compose de despliegue
+- Root `.env` is the **single** source of config values (not versioned). **No `.env.example`** existe: en su lugar **cada docker-compose trae defaults de ejemplo en la interpolación** (`${ADMIN_EMAIL:-admin@example.com}`, etc.), así que `docker compose up` funciona sin `.env` (quickstart público); un `.env` presente los sobrescribe. El `.env` **no se monta dentro de los contenedores**: cada docker-compose (`docker-compose.yml` de despliegue y `docker-compose.dev.yml` de desarrollo) reinyecta en el contenedor **solo las variables que necesita cada servicio**, interpoladas desde el `.env` raíz vía `environment:` (`.env` → Compose → env vars del contenedor). Así ningún contenedor ve secretos que no le corresponden. La var `TAG` (default `latest`) elige la versión de imagen en el compose de despliegue
 - `backend/app/config.py` reads env_file from **one** candidate: the repo root `.env` (missing files are ignored) — makes local runs outside Docker work
 - Real environment variables take precedence over dotenv files (pydantic-settings); en Docker mandan las env vars inyectadas por Compose y en local el `.env` raíz. `Settings` uses `extra="ignore"` so unknown vars are tolerated
 - Vars del backend declaradas en Compose: `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `NOVIO_EMAIL`, `NOVIO_PASSWORD`, `NOVIA_EMAIL`, `NOVIA_PASSWORD`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SECRET_KEY`, `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`, `PYTHONUNBUFFERED`. El frontend solo recibe `VITE_PROXY_TARGET`
@@ -130,6 +130,5 @@ Canonical ER diagram in `README.md`. Summary: **User** (anonymous uuid+alias or 
 - **Frontend** (`frontend/src/`): tests junto al archivo (`*.test.js`/`*.jsx`); imports explícitos de `vitest` (sin globals, para que oxlint no queje); mocks de `../api`/`../context/useAuth`/`../driveJobs` con `vi.mock`; el long-press de selección debe probarse como lo usa la UI real (`enter()` + `toggle(id)` en el **mismo** `act`)
 
 
-- `README.md` is the canonical architecture reference with Mermaid diagrams
-- `plan.md` is the original specification
+- `README.md` (inglés) / `README.es.md` (español) son la referencia canónica de arquitectura con diagramas Mermaid
 - This file (AGENTS.md) is the quick-start for new agent sessions

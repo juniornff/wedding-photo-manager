@@ -1,26 +1,167 @@
 # Wedding Photo Manager
 
-Aplicación web para gestionar fotos de bodas: subida, visualización y descarga por parte de los invitados, más el módulo interactivo **Fotógrafo Secreto**.
+[![CI](https://github.com/juniornff/wedding-photo-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/juniornff/wedding-photo-manager/actions/workflows/ci.yml)
+[![CD](https://github.com/juniornff/wedding-photo-manager/actions/workflows/cd.yml/badge.svg)](https://github.com/juniornff/wedding-photo-manager/actions/workflows/cd.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-174%20backend%20%2B%2077%20frontend-blue.svg)](#tests--ciud)
 
----
+Web application to manage wedding photos: guests upload, browse and download photos **without signing up**, while the couple enjoys the interactive **Secret Photographer** game (per-table challenges with QR codes) and a full admin panel.
 
-## Stack tecnológico
+**English** | [Español](README.es.md)
 
-| Capa | Tecnología |
+![Main page](docs/screenshots/main.png)
+
+## Contents
+
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [Tech stack](#tech-stack)
+- [Quick start](#quick-start)
+- [Use it for your wedding](#use-it-for-your-wedding)
+- [Configuration (.env)](#configuration-env)
+- [Architecture](#architecture)
+- [API](#api)
+- [Business rules](#business-rules)
+- [Photo directories](#photo-directories)
+- [Tests & CI/CD](#tests--ciud)
+- [Technical decisions](#technical-decisions)
+- [Project structure](#project-structure)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Features
+
+### Main module
+- Wedding info (names, date, message) and a **carousel** of the couple's photos
+- **Gallery** of photos uploaded by guests, with an optional message (150 characters)
+- Uploads with **no account**: anonymous per-device identity, recoverable via **Google sign-in** (name and profile photo)
+- **Every image format** supported, including iPhone HEIC/HEIF (converted to JPEG on upload), up to 25 MB
+- **Bulk download**: long-press a photo to select several → single ZIP (max 100) or individual files
+- **Save to Google Drive** (optional): users with a linked Google account can send selections to their Drive
+- **Live** gallery via SSE (new/removed photos and updates appear instantly)
+
+### Secret Photographer module
+- Every table has a **unique QR code** (PNG downloadable from the admin panel); guests scan it and are assigned to their table automatically
+- **Per-table challenges** created by the admins; one photo per participant per challenge
+- Each participant only sees **their own photo** per challenge — nobody else's
+- **Public live dashboard** (`/fotografo-secreto`): tables → challenges → photos with author and progress, no login required
+- The admin picks the **winning table**, announced live with a confetti animation
+
+### Admin module (`/admin`)
+- Wedding info, color palette, carousel
+- Table management (with QR view) and challenge management (create, edit, unlock, browse photos)
+- Gallery and challenge-photo moderation
+- User management (admin/guest role, table assignment, delete with or without photos)
+- Select/deselect the winning table
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Main page](docs/screenshots/main.png) | ![Multi-selection](docs/screenshots/gallery-selection.png) |
+| Main page: hero, carousel and guest gallery | Multi-selection with the download toolbar |
+| ![Secret Photographer dashboard](docs/screenshots/secret-dashboard.png) | ![Admin panel](docs/screenshots/admin.png) |
+| Public Secret Photographer dashboard | Admin panel |
+
+## Tech stack
+
+| Layer | Technology |
 |---|---|
 | Backend | FastAPI + SQLAlchemy (async) + SQLite (WAL mode) |
-| Backend libs | Pillow (thumbnails) + pillow-heif (HEIC→JPEG), Authlib (OAuth), qrcode (QR gen), pydantic-settings (config) |
+| Backend libs | Pillow (thumbnails) + pillow-heif (HEIC→JPEG), Authlib (OAuth), qrcode (QR), pydantic-settings (config) |
 | Frontend | React 19 + Vite + TailwindCSS v4 + React Router |
-| Frontend HTTP | fetch nativo + React Context (sin Redux/axios) |
-| Tiempo real | Server-Sent Events (SSE) |
-| Almacenamiento | Local filesystem (`Fotos/`, `Miniaturas/`), SQLite en `data/wedding.db` |
-| Autenticación | Google OAuth + UUID anónimo (localStorage) |
-| Despliegue | Docker Compose (backend + frontend); Caddy + Cloudflare en producción |
-| Testing | pytest (backend, 174 tests) + Vitest/RTL (frontend, 77 tests) + CI/CD en GitHub Actions (tests + imágenes GHCR) |
+| Frontend HTTP | Native fetch + React Context (no Redux/axios) |
+| Realtime | Server-Sent Events (SSE) |
+| Storage | Local filesystem (`Fotos/`, `Miniaturas/`) + SQLite (`data/wedding.db`) |
+| Auth | Google OAuth + anonymous UUID (localStorage) |
+| Deployment | Docker Compose; images on GHCR built by GitHub Actions (nginx included in the frontend image) |
+| Testing | pytest (backend, 174 tests) + Vitest/RTL (frontend, 77 tests) + CI/CD on GitHub Actions |
 
----
+## Quick start
 
-## Arquitectura del sistema
+**Requirements:** Docker with Docker Compose.
+
+### Option A — from source (no external accounts)
+
+```bash
+git clone https://github.com/juniornff/wedding-photo-manager.git
+cd wedding-photo-manager
+docker compose -f docker-compose.dev.yml up --build
+```
+
+Open **http://localhost:5173** (backend also exposed on `localhost:8001`). Best for development: Vite hot-reload included.
+
+### Option B — pre-built images (production)
+
+Images are published to GitHub Container Registry on every push to `master` (`ghcr.io/juniornff/wedding-photo-manager-backend|-frontend`). Being private, they require authentication first:
+
+```bash
+docker login ghcr.io          # username + PAT with read:packages
+docker compose up -d          # pull only, no build
+```
+
+Open **http://localhost:8080** (nginx frontend serving the SPA with `/api` and SSE proxying).
+
+### Example credentials and `.env`
+
+Both compose files **work without a `.env`**: they ship example credentials in the interpolation (`admin@example.com` / `admin123`, etc.). For any real use, create a `.env` in the repo root — Docker Compose reads it automatically and **overrides** the examples:
+
+```env
+ADMIN_EMAIL=your-email@example.com
+ADMIN_PASSWORD=change-this
+NOVIO_EMAIL=...
+NOVIO_PASSWORD=...
+NOVIA_EMAIL=...
+NOVIA_PASSWORD=...
+SECRET_KEY=a-long-random-string
+FRONTEND_URL=http://localhost:8080
+```
+
+> **Important**: change the example credentials and `SECRET_KEY` before exposing the app. Full variable list under [Configuration](#configuration-env).
+
+- Admin panel: **http://localhost:8080/admin**
+- Future deployments: `TAG=<latest|sha-…|X.Y.Z>` in the `.env` picks the image version (rollback included)
+- On your LAN: open `http://<machine-IP>:8080` from any device
+
+## Use it for your wedding
+
+1. Start the stack and sign in to `/admin` with `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
+2. **Wedding info**: couple names, date, message and color palette → front page and legal pages.
+3. **Carousel**: upload the couple's photos.
+4. **Tables**: create the reception tables; each one generates a **unique QR code** (download and print one per table).
+5. **Challenges**: create the Secret Photographer challenges (any number of challenges per table).
+6. Guests visit the site **with no account**, scan their table's QR and play.
+7. **Winner**: when the game ends, pick the winning table in the Winner tab → announced live with confetti on the public dashboard.
+8. (Optional) **Google**: connect an account from the navbar to recover identity across devices and enable Google Drive saving (requires Google OAuth credentials, see [Configuration](#configuration-env)).
+
+## Configuration (.env)
+
+The root `.env` file (not versioned) is the **single source of configuration**; the compose files interpolate it into each container's environment (each service only receives the variables it needs). Outside Docker, `Settings` (`backend/app/config.py`) also reads it directly (missing file is ignored). Real environment variables take precedence over the file; `extra="ignore"` tolerates unknown keys.
+
+| Variable | Purpose |
+|---|---|
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Main admin (password or Google login) |
+| `NOVIO_EMAIL` / `NOVIO_PASSWORD` | Second admin (the groom) |
+| `NOVIA_EMAIL` / `NOVIA_PASSWORD` | Third admin (the bride) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth (optional) |
+| `SECRET_KEY` | Session-cookie signing key |
+| `FRONTEND_URL` | Canonical frontend origin (CORS, OAuth redirects, Google `redirect_uri`) |
+| `CORS_ALLOWED_ORIGINS` | Extra CORS origins (CSV), e.g. a phone's LAN IP |
+| `TAG` | Image version in the deploy compose (default `latest`) |
+
+Optional, with defaults in `Settings`: `ORPHAN_CLEANUP_INTERVAL=10`, `MAX_UPLOAD_SIZE=25` (MB), `RATE_LIMIT_PER_MINUTE=15`, `DRIVE_RATE_LIMIT_PER_MINUTE=60`, `DRIVE_UPLOAD_CONCURRENCY=4`, `DATABASE_URL`, `UPLOAD_DIR=Fotos`, `THUMBNAILS_DIR=Miniaturas`.
+
+Notes:
+
+- The 3 `.env` emails are re-asserted as admins on every boot; the admin panel can also pre-create users by email and change roles.
+- **Google OAuth** (optional): register the project in Google Cloud with the legal URLs (`FRONTEND_URL/privacidad` and `/terminos`; the homepage must link to them). Google only accepts `localhost` or public domains as `redirect_uri` (never private IPs); on a LAN use `FRONTEND_URL=http://localhost:8080` and let phones hit the API via CORS (`CORS_ALLOWED_ORIGINS`).
+- **Google Drive** (optional): enable the Google Drive API and declare the `drive.file` scope (non-sensitive, no verification); the app must be **"In production"** on the consent screen (in "Testing", refresh tokens expire after 7 days).
+- **Frontend**: no `.env` of its own — the API is relative and in dev Vite proxies `/api` to `VITE_PROXY_TARGET` (default `http://localhost:8000`; the dev compose uses `http://backend:8000`).
+- **Interactive API docs**: FastAPI serves Swagger UI at `GET /docs` and ReDoc at `/redoc` (both reachable through the proxy in production).
+
+## Architecture
+
+### System overview
 
 ```mermaid
 graph TB
@@ -28,7 +169,7 @@ graph TB
         REACT[React + Vite]
         TAILWIND[TailwindCSS]
         SSE[SSE Client]
-        EVENT_SRC[EventSource propio del dashboard]
+        EVENT_SRC[Dashboard own EventSource]
     end
 
     subgraph Backend
@@ -49,7 +190,7 @@ graph TB
 
     REACT -->|HTTP/REST| FASTAPI
     REACT -->|SSE| SSE_SRV
-    EVENT_SRC -->|SSE sin login| SSE_SRV
+    EVENT_SRC -->|SSE no login| SSE_SRV
     FASTAPI --> SQLA
     SQLA --> DB
     FASTAPI --> FS_SRC
@@ -57,49 +198,20 @@ graph TB
     FASTAPI -->|OAuth| GOOGLE
 ```
 
----
-
-## Módulos
+### Modules
 
 ```mermaid
 graph LR
-    MAIN[Módulo Principal<br/>Subida / Galería / Info boda]
-    FS[Módulo Fotógrafo Secreto<br/>Retos por mesa / QR / Dashboard público]
-    ADMIN[Módulo Admin<br/>Panel de novios]
+    MAIN[Main module<br/>Upload / Gallery / Wedding info]
+    FS[Secret Photographer<br/>Per-table challenges / QR / Live dashboard]
+    ADMIN[Admin module<br/>Control panel]
 
     MAIN --> FS
     ADMIN --> MAIN
     ADMIN --> FS
 ```
 
-### Módulo Principal
-- Información de la boda (nombres, fecha)
-- Carrusel de fotos de los novios (`Fotos/Carrucel/`)
-- Galería de fotos subidas por invitados (`Fotos/Galeria/`) — con mensaje opcional (150 caracteres)
-- Botón flotante para subir fotos
-- Descarga múltiple: mantén presionada una foto para activar el modo selección → diálogo **ZIP único** (máx. 100 fotos) o **archivos individuales**
-- Visualización en vivo vía SSE (`new_photo`, `gallery_photo_deleted`, `info_updated`, `carousel_updated`)
-
-### Módulo Fotógrafo Secreto
-- Cada mesa tiene un QR único (generado como PNG estático en `Fotos/Fotografo-Secreto/Mesa-XX/QR.png`)
-- Retos por mesa (creados desde el panel admin); 1 foto por participante por reto, máximo = nº de participantes de la mesa
-- El usuario se asigna a una mesa al escanear el QR (una sola vez, error si reasigna)
-- Mensaje opcional (150 caracteres) también en las fotos de reto
-- Cada participante ve su **propia foto** por reto (badge "✓ Tu foto subida" + lightbox)
-- **Dashboard público** (`/fotografo-secreto`): mesas → retos → fotos con autor, progreso y ganador en vivo, animación de confetti al elegir ganador
-- Descarga múltiple desde el dashboard (pulsación larga → ZIP de retos máx. 100 o archivos individuales)
-- Admin elige *(y puede deseleccionar)* ganador manualmente
-
-### Módulo Admin
-- Gestionar carrusel, info de boda, esquema de colores
-- Administrar mesas y retos
-- Ver/descargar/eliminar fotos de cada reto
-- Selección múltiple en el tab Galería (pulsación larga; ZIP o individuales; "Todas" respeta el filtro por usuario)
-- Elegir o quitar la mesa ganadora del Fotógrafo Secreto
-
----
-
-## Diagrama Entidad-Relación (Base de Datos)
+### Entity-Relationship (database)
 
 ```mermaid
 erDiagram
@@ -176,178 +288,174 @@ erDiagram
         datetime uploaded_at
     }
 
-    User ||--o{ GalleryPhoto : "sube"
-    User ||--o{ ChallengePhoto : "sube"
-    User }o--o| Table : "asignado a"
-    Table ||--o{ Challenge : "tiene"
-    Challenge ||--o{ ChallengePhoto : "recibe"
+    User ||--o{ GalleryPhoto : "uploads"
+    User ||--o{ ChallengePhoto : "uploads"
+    User }o--o| Table : "assigned to"
+    Table ||--o{ Challenge : "has"
+    Challenge ||--o{ ChallengePhoto : "receives"
 ```
 
-> Nota: `Table.name` no es único en la BD (solo `qr_code` lo es). Los cambios de esquema se aplican con `Base.metadata.create_all` + `ALTER TABLE` manuales en el lifespan (sin Alembic).
+> `Table.name` is not unique (only `qr_code` is). Schema changes are applied with `Base.metadata.create_all` plus hand-written `ALTER TABLE` statements in the lifespan (no Alembic).
 
----
-
-## Diagrama de Casos de Uso
+### Use cases
 
 ```mermaid
 graph TB
-    INVITADO[Invitado]
-    NOVIOS[Novios]
-    GOOGLE[Usuario Google OAuth]
-    ESPECTADOR[Invitado espectador]
+    GUEST[Guest]
+    COUPLE[Couple]
+    GOOGLE[Google OAuth user]
+    VIEWER[Guest viewer]
 
-    subgraph "Módulo Principal"
-        UC1[Ver info boda]
-        UC2[Ver carrusel]
-        UC3[Subir foto + mensaje]
-        UC4[Ver galería en vivo]
-        UC5[Descargar foto]
+    subgraph "Main module"
+        UC1[View wedding info]
+        UC2[View carousel]
+        UC3[Upload photo + message]
+        UC4[View live gallery]
+        UC5[Download photo]
     end
 
-    subgraph "Fotógrafo Secreto"
-        UC6[Escanear QR mesa]
-        UC7[Ver retos de mesa]
-        UC8[Subir foto + mensaje para reto]
-        UC9[Ver mi propia foto por reto]
-        UC10[Ver tablero público en vivo]
+    subgraph "Secret Photographer"
+        UC6[Scan table QR]
+        UC7[View table challenges]
+        UC8[Upload photo + message for a challenge]
+        UC9[View my own photo per challenge]
+        UC10[View public live dashboard]
     end
 
     subgraph "Admin"
-        UC11[Gestionar carrusel]
-        UC12[Editar info boda]
-        UC13[Cambiar colores]
-        UC14[Administrar mesas]
-        UC15[Crear/editar/desbloquear retos]
-        UC16[Gestionar fotos de retos]
-        UC17[Elegir mesa ganadora]
-        UC18[Quitar mesa ganadora]
-        UC19[Moderar galería]
-        UC20[Gestionar usuarios: renombrar, mesa, borrar]
+        UC11[Manage carousel]
+        UC12[Edit wedding info]
+        UC13[Change colors]
+        UC14[Manage tables]
+        UC15[Create/edit/unlock challenges]
+        UC16[Manage challenge photos]
+        UC17[Pick winning table]
+        UC18[Remove winning table]
+        UC19[Moderate gallery]
+        UC20[Manage users: rename, table, delete]
     end
 
-    INVITADO --> UC1
-    INVITADO --> UC2
-    INVITADO --> UC3
-    INVITADO --> UC4
-    INVITADO --> UC5
-    INVITADO --> UC6
-    INVITADO --> UC7
-    INVITADO --> UC8
-    INVITADO --> UC9
+    GUEST --> UC1
+    GUEST --> UC2
+    GUEST --> UC3
+    GUEST --> UC4
+    GUEST --> UC5
+    GUEST --> UC6
+    GUEST --> UC7
+    GUEST --> UC8
+    GUEST --> UC9
 
-    ESPECTADOR --> UC10
+    VIEWER --> UC10
 
-    NOVIOS --> UC11
-    NOVIOS --> UC12
-    NOVIOS --> UC13
-    NOVIOS --> UC14
-    NOVIOS --> UC15
-    NOVIOS --> UC16
-    NOVIOS --> UC17
-    NOVIOS --> UC18
-    NOVIOS --> UC19
-    NOVIOS --> UC20
+    COUPLE --> UC11
+    COUPLE --> UC12
+    COUPLE --> UC13
+    COUPLE --> UC14
+    COUPLE --> UC15
+    COUPLE --> UC16
+    COUPLE --> UC17
+    COUPLE --> UC18
+    COUPLE --> UC19
+    COUPLE --> UC20
 
-    GOOGLE -->|Recupera identidad| UC3
-    GOOGLE -->|Recupera identidad| UC8
+    GOOGLE -->|Recovers identity| UC3
+    GOOGLE -->|Recovers identity| UC8
 ```
 
----
+### Sequence diagrams
 
-## Diagramas de Secuencia
-
-### Flujo: Acceso de invitado y subida de foto
+#### Guest access and photo upload
 
 ```mermaid
 sequenceDiagram
-    participant C as Cliente (Browser)
+    participant C as Client (Browser)
     participant API as FastAPI
     participant DB as SQLite
     participant FS as Filesystem
 
-    Note over C: Primera visita
+    Note over C: First visit
     C->>API: GET /api/wedding-info
     API->>DB: SELECT wedding_info
-    DB-->>API: datos boda
-    API-->>C: { novios, fecha, colores }
+    DB-->>API: wedding data
+    API-->>C: names, date, colors
 
     Note over C: localStorage check
-    C->>C: ¿UUID exists?
+    C->>C: UUID exists?
     alt No UUID
-        C->>API: POST /api/guest { alias }
-        API->>API: Generar uuid4 aleatorio
+        C->>API: POST /api/guest with alias
+        API->>API: Generate random uuid4
         API->>DB: INSERT user
         DB-->>API: user_id
-        API-->>C: { user_id, uuid }
-        C->>C: Guardar UUID en localStorage
+        API-->>C: user_id and uuid
+        C->>C: Store UUID in localStorage
     end
 
-    Note over C: Subir foto
-    C->>API: POST /api/gallery/upload { file, message, user_id }
-    API->>API: Validar MIME + extensión
-    API->>API: Generar UUID filename
-    API->>FS: Guardar original en Fotos/Galeria/
-    API->>FS: Generar thumbnail en Miniaturas/Galeria/
+    Note over C: Upload photo
+    C->>API: POST /api/gallery/upload with file, message, user_id
+    API->>API: Validate MIME + extension
+    API->>API: Generate UUID filename
+    API->>FS: Save original to Fotos/Galeria/
+    API->>FS: Generate thumbnail in Miniaturas/Galeria/
     API->>DB: INSERT gallery_photo
     DB-->>API: photo_id
-    API-->>C: { photo_id, url, thumbnail_url }
-    API-->>C: SSE: new_photo { photo_id }
+    API-->>C: photo_id, url, thumbnail_url
+    API-->>C: SSE new_photo with photo_id
 ```
 
-### Flujo: Fotógrafo Secreto (participante)
+#### Secret Photographer (participant)
 
 ```mermaid
 sequenceDiagram
-    participant C as Participante (Browser)
+    participant C as Participant (Browser)
     participant API as FastAPI
     participant DB as SQLite
 
-    Note over C: Escanea QR de mesa
+    Note over C: Scans table QR
     C->>API: GET /api/secret-photographer/table/{qr_code}?user_id=X
-    API->>DB: Asigna mesa al usuario (table_id) si es primera vez
-    API->>DB: SELECT table + challenges + my_photo por reto
-    DB-->>API: challenges[1..N] con my_photo
-    API-->>C: { table, challenges: [{..., my_photo}] }
+    API->>DB: Assign table to user on first visit
+    API->>DB: SELECT table + challenges + my_photo per challenge
+    DB-->>API: challenges 1..N with my_photo
+    API-->>C: table + challenges with my_photo
 
-    Note over C: Participante elige reto
-    alt Ya subió su foto
-        C->>C: Muestra su foto + mensaje + lightbox (no ve fotos ajenas)
-    else Reto bloqueado (max alcanzado)
-        C->>C: "Este reto está completo"
-    else Puede subir
-        C->>API: POST /api/secret-photographer/upload?challenge_id=ID { file, user_id, message }
-        alt Ya subió foto para este reto
-            API-->>C: 409 { detail: "Ya subiste una foto..." }
+    Note over C: Participant picks a challenge
+    alt Already uploaded my photo
+        C->>C: Shows my photo + message + lightbox (never sees others)
+    else Challenge locked
+        C->>C: This challenge is full
+    else Can upload
+        C->>API: POST /api/secret-photographer/upload with file, user_id, message
+        alt Already uploaded for this challenge
+            API-->>C: 409 you already uploaded a photo
         else count >= max_photos
-            API-->>C: 409 { detail: "Reto con máximo de fotos" }
+            API-->>C: 409 challenge photo limit reached
         else
-            API-->>C: 201 { photo_id }
+            API-->>C: 201 photo_id
         end
     end
 
-    API-->>C: SSE: new_challenge_photo { photo_id, challenge_id, table_id }
+    API-->>C: SSE new_challenge_photo with photo_id, challenge_id, table_id
 ```
 
-### Flujo: Dashboard público (espectador no participante)
+#### Public dashboard (viewer)
 
 ```mermaid
 sequenceDiagram
-    participant E as Espectador (Browser)
+    participant E as Viewer (Browser)
     participant API as FastAPI
 
     E->>API: GET /api/secret-photographer/dashboard
-    API-->>E: { winner_table_id/name, tables:[{challenges:[{photos}]}] }
+    API-->>E: winner + tables with challenges and photos
 
-    Note over E: EventSource propio (sin login) a /api/events
-    E->>API: SSE: new_challenge_photo
-    E->>E: Refetch dashboard + anima miniaturas nuevas (debounce ~250ms)
-    E->>API: SSE: challenge_photo_deleted
+    Note over E: Own EventSource without login to /api/events
+    E->>API: SSE new_challenge_photo
+    E->>E: Refetch dashboard + animate new thumbnails
+    E->>API: SSE challenge_photo_deleted
     E->>E: Refetch dashboard
-    E->>API: SSE: winner_selected
-    E->>E: Refetch dashboard + confetti y resaltado del ganador
+    E->>API: SSE winner_selected
+    E->>E: Refetch dashboard + confetti and winner highlight
 ```
 
-### Flujo: Elección de ganador (Admin)
+#### Winner selection (Admin)
 
 ```mermaid
 sequenceDiagram
@@ -358,58 +466,54 @@ sequenceDiagram
     A->>API: GET /api/admin/tables (auth required)
     API->>DB: SELECT tables + photo_counts
     DB-->>API: table list
-    API-->>A: { tables }
+    API-->>A: tables
 
-    alt Seleccionar ganador
+    alt Select winner
         A->>API: POST /api/admin/select-winner?table_id=N
         API->>DB: UPDATE wedding_info SET winner_table_id = N
         DB-->>API: success
-        API-->>A: { message, table_id }
-        API-->>A: SSE: winner_selected { table_id }
-    else Quitar ganador
+        API-->>A: message + table_id
+        API-->>A: SSE winner_selected with table_id
+    else Remove winner
         A->>API: DELETE /api/admin/select-winner
         API->>DB: UPDATE wedding_info SET winner_table_id = NULL
         DB-->>API: success
-        API-->>A: { message, table_id: null }
-        API-->>A: SSE: winner_selected { table_id: null }
+        API-->>A: message + table_id null
+        API-->>A: SSE winner_selected with null table_id
     end
 ```
 
----
+### State diagrams
 
-## Diagrama de Estados
-
-### Ciclo de vida de una foto
+#### Photo lifecycle
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Pendiente: Usuario selecciona archivo
-    Pendiente --> Validando: Envía a servidor
-    Validando --> Rechazada: MIME inválido
-    Validando --> Rechazada: Extensión no permitida
-    Validando --> Almacenando: Validación exitosa
-    Almacenando --> ConThumbnail: Thumbnail generado
-    ConThumbnail --> Visible: Guardada en DB
-    Visible --> Eliminada: Admin la elimina
-    Eliminada --> [*]
+    [*] --> Pending: User picks a file
+    Pending --> Validating: Sent to server
+    Validating --> Rejected: Invalid MIME
+    Validating --> Rejected: Disallowed extension
+    Validating --> Storing: Validation passed
+    Storing --> WithThumbnail: Thumbnail generated
+    WithThumbnail --> Visible: Saved in DB
+    Visible --> Deleted: Admin deletes it
+    Deleted --> [*]
 ```
 
-### Ciclo de vida del juego Fotógrafo Secreto
+#### Secret Photographer game lifecycle
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Preparacion: Admin crea mesas + retos
-    Preparacion --> Activo: Admin activa módulo
-    Activo --> Completando: Participantes suben fotos
-    Completando --> Cerrado: Admin cierra juego
-    Cerrado --> Votacion: Admin revisa fotos
-    Votacion --> Finalizado: Admin elige ganador
-    Finalizado --> Activo: Admin deselecciona ganador (reabre el juego)
+    [*] --> Setup: Admin creates tables + challenges
+    Setup --> Active: Admin activates the game
+    Active --> Playing: Participants upload photos
+    Playing --> Closed: Admin closes the game
+    Closed --> Reviewing: Admin reviews photos
+    Reviewing --> Finished: Admin picks the winner
+    Finished --> Active: Admin deselects the winner (reopens the game)
 ```
 
----
-
-## Diagrama de Componentes del Backend
+### Backend components
 
 ```mermaid
 classDiagram
@@ -460,6 +564,10 @@ classDiagram
         +google_callback()
         +admin_login()
         +logout()
+    }
+
+    class SSERouter {
+        +events()
     }
 
     class DriveRouter {
@@ -526,23 +634,21 @@ classDiagram
     AdminRouter --> SSEManager
 ```
 
-### Eventos SSE emitidos por el backend
+### SSE events emitted by the backend
 
-| Evento | Emisor | Payload |
+| Event | Emitted by | Payload |
 |---|---|---|
 | `new_photo` | `POST /api/gallery/upload` | `{ photo_id }` |
-| `gallery_photo_deleted` | `DELETE /api/admin/gallery/{id}` (también al borrar usuario con `delete_photos=true`) | `{ photo_id }` |
+| `gallery_photo_deleted` | `DELETE /api/admin/gallery/{id}` (also when deleting a user with `delete_photos=true`) | `{ photo_id }` |
 | `new_challenge_photo` | `POST /api/secret-photographer/upload` | `{ photo_id, challenge_id, table_id }` |
-| `challenge_photo_deleted` | `DELETE /api/admin/challenges/{cid}/photos/{pid}` (también al borrar usuario con `delete_photos=true`) | `{ photo_id, challenge_id }` |
-| `carousel_updated` | Admin carrusel (upload/delete/reorder) | `{}` |
-| `info_updated` | `PUT /api/admin/wedding-info` | `{ novios, fecha, colores, ... }` |
-| `winner_selected` | Admin seleccionar/quitar ganador | `{ table_id }` o `{ table_id: null }` |
+| `challenge_photo_deleted` | `DELETE /api/admin/challenges/{cid}/photos/{pid}` (also when deleting a user with `delete_photos=true`) | `{ photo_id, challenge_id }` |
+| `carousel_updated` | Admin carousel ops (upload/delete/reorder) | `{}` |
+| `info_updated` | `PUT /api/admin/wedding-info` | Full `WeddingInfoResponse` |
+| `winner_selected` | Admin select/deselect winner | `{ table_id }` or `{ table_id: null }` |
 
-> El dashboard público abre su propio `EventSource` a `/api/events` (endpoint sin auth) para `new_challenge_photo`, `challenge_photo_deleted` y `winner_selected`.
+> The public dashboard opens its own `EventSource` against `/api/events` (no auth) for `new_challenge_photo`, `challenge_photo_deleted` and `winner_selected`.
 
----
-
-## Árbol de rutas y componentes del Frontend
+### Frontend routes and components
 
 ```mermaid
 graph TB
@@ -562,26 +668,26 @@ graph TB
     end
 
     subgraph "SecretDashboardPage"
-        SD_GRID[Grilla de mesas/retos/fotos]
+        SD_GRID[Tables/challenges/photos grid]
         SD_LIGHTBOX[PhotoLightbox]
-        SD_CONFETTI[Confetti + banner ganador]
+        SD_CONFETTI[Confetti + winner banner]
     end
 
     subgraph "FotografoSecretoPage"
-        CHAL_LIST[Retos de la mesa]
+        CHAL_LIST[Table challenges]
         FS_UPLOAD[PhotoUpload]
         FS_LIGHTBOX[PhotoLightbox my_photo]
     end
 
-    subgraph "AdminPage [tabs]"
+    subgraph "AdminPage tabs"
         TAB_DASH[Dashboard]
-        TAB_INFO[Info Boda]
-        TAB_CARRUSEL[Carrusel]
-        TAB_TABLES[Mesas + modal QR]
-        TAB_RETOS[Retos]
-        TAB_GALERIA[Galería]
-        TAB_USERS[Usuarios]
-        TAB_WINNER[Ganador]
+        TAB_INFO[Wedding info]
+        TAB_CARRUSEL[Carousel]
+        TAB_TABLES[Tables + QR modal]
+        TAB_RETOS[Challenges]
+        TAB_GALERIA[Gallery]
+        TAB_USERS[Users]
+        TAB_WINNER[Winner]
         CHAL_MODAL[ChallengePhotosModal]
     end
 
@@ -618,171 +724,152 @@ graph TB
     TAB_GALERIA --> SELECT_UI
 ```
 
----
+## API
 
-## Directorios de fotos
+> Interactive docs: **`GET /docs`** (Swagger UI) and `/redoc` (ReDoc), served by FastAPI.
+
+| Method | Route | Auth | Purpose |
+|---|---|---|---|
+| GET | `/api/wedding-info` | No | Wedding info + winner |
+| GET | `/api/carousel` | No | Carousel photos |
+| GET | `/api/gallery` | No | Gallery (offset/limit pagination) |
+| POST | `/api/gallery/upload` | No (rate limit) | Upload photo + message |
+| GET | `/api/gallery/{id}/download` | No | Download one photo |
+| POST | `/api/gallery/batch-download` | No | Download several as ZIP (max 100 ids) |
+| POST | `/api/guest`, `GET /api/guest/me` | No | Create/query anonymous guest |
+| GET | `/api/google`, `/api/google/callback` | No | Google OAuth (`?user_id=X` links, `&drive=1` incremental Drive consent) |
+| GET | `/api/drive/status?user_id=X` | No | `{google_linked, drive_ready}` |
+| POST | `/api/drive/save-batch` | No (rate limit) | Save up to 100 photos to Drive in the background (`{job_id, total}`) |
+| GET | `/api/drive/job/{job_id}?user_id=X` | No | Drive batch status |
+| POST | `/api/admin/login`, `/api/logout` | — | Admin session |
+| GET | `/api/admin/me` | Admin | Admin session/identity |
+| GET | `/api/events` | No | SSE |
+| GET | `/api/secret-photographer/dashboard` | No | Public live dashboard |
+| GET | `/api/secret-photographer/table/{qr}` | No | Table + challenges + my_photo |
+| GET | `/api/secret-photographer/my-table?user_id=X` | No | User's table or `null` |
+| POST | `/api/secret-photographer/upload` | No (rate limit) | Upload challenge photo + message |
+| POST | `/api/secret-photographer/batch-download` | No | ZIP of challenge photos (`Mesa-XX/…`, max 100 ids) |
+| GET | `/api/secret-photographer/challenge/{id}` | No | Challenge detail (blocked) |
+| GET | `/api/admin/dashboard` | Admin | Totals (photos, users, tables, challenges, carousel) |
+| GET/POST/PUT/DELETE | `/api/admin/tables` | Admin | Table management |
+| GET | `/api/admin/tables/{id}/photos` | Admin | Photos per table (winner view) |
+| GET/POST/PUT/DELETE | `/api/admin/challenges` | Admin | Challenge management |
+| PUT | `/api/admin/challenges/{id}/unlock` | Admin | Unlock challenge for editing/deleting |
+| GET | `/api/admin/challenges/{id}/photos` | Admin | Photos of a challenge |
+| DELETE | `/api/admin/challenges/{id}/photos/{pid}` | Admin | Delete challenge photo |
+| POST/DELETE | `/api/admin/select-winner` | Admin | Pick/remove winner |
+| GET/POST/DELETE | `/api/admin/carousel` | Admin | Carousel management |
+| PUT | `/api/admin/carousel/reorder` | Admin | Reorder carousel |
+| DELETE | `/api/admin/gallery/{id}` | Admin | Delete gallery photo |
+| PUT | `/api/admin/wedding-info` | Admin | Edit wedding info/colors |
+| GET/POST/DELETE | `/api/admin/users` | Admin | User management (role, alias, table, delete) |
+| PATCH | `/api/admin/users/{id}/role` | Admin | Change admin/guest role |
+| PUT | `/api/admin/users/{id}` | Admin | Rename alias |
+| PATCH | `/api/admin/users/{id}/table` | Admin | Assign/clear table |
+| DELETE | `/api/admin/users/{id}?delete_photos=false` | Admin | Delete user; `false` anonymizes photos, `true` deletes them |
+
+## Business rules
+
+- Guests **need no account**: anonymous identity via a server-generated UUID (uuid4) stored in DB and localStorage
+- **Google OAuth** (optional) recovers identity across devices; when linked, the alias is replaced by the Google name and profile photo
+- Uploads validated by **real MIME type** (byte inspection) + extension; **every image format** (iPhone HEIC/HEIF is converted to JPEG with `exif_transpose`; the original is not kept); max **25 MB**
+- Files named with a **UUID** (no collisions); **thumbnails** in a max 150×150 box (aspect ratio preserved)
+- **Infinite scroll** pagination (offset/limit)
+- **Bulk download by selection** (gallery, admin tab and challenge dashboard): activated by **long-pressing** a photo (~500 ms), deactivated when the selection empties → **single ZIP** (max 100; temp file, deleted after sending) or **individual files** (no limit)
+- **Save to Google Drive** (only users with linked Google): incremental `drive.file` consent on first use, per-user refresh token, root folder `Fotos Boda {novio1} y {novio2}` (challenges mirror `Fotografo-Secreto/Mesa-XX`), duplicate skipping, background jobs with polling and toast notifications
+- **15 uploads/minute** per user (also for challenges)
+- Photos are served by FastAPI (no auth to view)
+- Optional **150-character** message on gallery and challenge photos
+- Secret Photographer: **1 photo/user/challenge** (unique constraint), max = table participant count; challenges lock when full (admins can unlock to edit/delete)
+- A user is assigned to a **table exactly once**; each participant sees **only their own photo** per challenge; viewers see everything on the public dashboard
+- **Admins** are `User` rows with `role='admin'` (no separate model); the 3 `.env` emails are re-asserted as admins on every boot; the panel can pre-create users by email and change roles; a Google login with an admin email **merges** any previous guest identity (photos + table)
+- Deleting a user can leave photos **anonymous** (`user_id=NULL` → "Anónimo") or **remove** them with their files
+- `Miniaturas/` mirrors `Fotos/`; orphan cleanup every 10 s; SQLite in **WAL mode** (no automatic backups)
+
+## Photo directories
 
 ```
 Fotos/
-├── Carrucel/          # Carrusel de los novios
-├── Galeria/           # Fotos subidas por invitados
+├── Carrucel/          # Couple's carousel
+├── Galeria/           # Guest uploads
 └── Fotografo-Secreto/
-    ├── Mesa-01/       # Fotos de mesa 1 (QR.png + fotos de retos)
-    ├── Mesa-02/       # Fotos de mesa 2
+    ├── Mesa-01/       # QR.png + challenge photos for table 1
+    ├── Mesa-02/
     └── ...
 
-Miniaturas/
-├── Carrucel/
-├── Galeria/
-└── Fotografo-Secreto/
-    └── Mesa-XX/
+Miniaturas/            # Same structure, 150×150 thumbnails
 ```
 
----
+## Tests & CI/CD
 
-## API (resumen de endpoints)
-
-| Método | Ruta | Auth | Uso |
-|---|---|---|---|
-| GET | `/api/wedding-info` | No | Info boda + ganador |
-| GET | `/api/carousel` | No | Fotos de carrusel |
-| GET | `/api/gallery` | No | Galería (paginación offset/limit) |
-| POST | `/api/gallery/upload` | No (rate limit) | Subir foto + mensaje |
-| GET | `/api/gallery/{id}/download` | No | Descargar una foto |
-| POST | `/api/gallery/batch-download` | No | Descargar varias en ZIP (máx. 100 ids) |
-| POST | `/api/guest`, `GET /api/guest/me` | No | Alta/consulta de invitado anónimo |
-| GET | `/api/google`, `/api/google/callback` | No | OAuth Google (`?user_id=X` vincula, `&drive=1` pide consentimiento incremental `drive.file` + refresh token) |
-| GET | `/api/drive/status?user_id=X` | No | `{google_linked, drive_ready}` para mostrar/ocultar la opción Drive |
-| POST | `/api/drive/save-batch` | No (rate limit) | Inicia el guardado en segundo plano de hasta 100 fotos (`{user_id, photo_ids, kind}`); responde `{job_id, total}` |
-| GET | `/api/drive/job/{job_id}?user_id=X` | No | Estado del lote (`uploaded/skipped/failed/needs_auth/folder_id`); el frontend lo sondea y avisa al terminar con toasts |
-| POST | `/api/admin/login`, `/api/logout` | — | Sesión admin |
-| GET | `/api/admin/me` | Admin | Sesión/identidad del admin |
-| GET | `/api/events` | No | SSE |
-| GET | `/api/secret-photographer/dashboard` | No | Tablero público en vivo |
-| GET | `/api/secret-photographer/table/{qr}` | No | Mesa + retos + my_photo |
-| GET | `/api/secret-photographer/my-table?user_id=X` | No | Mesa del usuario (`{id,name,qr_code}` o `null`); para el botón "Mi Mesa" |
-| POST | `/api/secret-photographer/upload` | No (rate limit) | Subir foto de reto + mensaje |
-| POST | `/api/secret-photographer/batch-download` | No | Descargar varias fotos de retos en ZIP (`Mesa-XX/…`, máx. 100 ids) |
-| GET | `/api/secret-photographer/challenge/{id}` | No | Detalle reto (blocked) |
-| GET | `/api/admin/dashboard` | Admin | Totales (fotos, usuarios, mesas, retos, carrusel) |
-| GET | `/api/admin/tables`, `POST/PUT/DELETE` | Admin | Gestión mesas |
-| GET | `/api/admin/tables/{id}/photos` | Admin | Fotos por mesa (vista ganador) |
-| GET/POST/PUT/DELETE | `/api/admin/challenges` | Admin | Gestión retos |
-| PUT | `/api/admin/challenges/{id}/unlock` | Admin | Desbloquear reto completo para editar/eliminar |
-| GET | `/api/admin/challenges/{id}/photos` | Admin | Fotos de un reto |
-| DELETE | `/api/admin/challenges/{id}/photos/{pid}` | Admin | Borrar foto de reto |
-| POST/DELETE | `/api/admin/select-winner` | Admin | Elegir/quitar ganador |
-| GET/POST/DELETE | `/api/admin/carousel` | Admin | Gestión carrusel |
-| PUT | `/api/admin/carousel/reorder` | Admin | Reordenar carrusel |
-| DELETE | `/api/admin/gallery/{id}` | Admin | Borrar foto de galería |
-| PUT | `/api/admin/wedding-info` | Admin | Editar info boda/colores |
-| GET | `/api/admin/users` | Admin | Listar usuarios (alias o nombre Google, rol Admin/Invitado, email, Google vinculado, mesa, fotos, fecha) |
-| POST | `/api/admin/users` | Admin | Pre-crear usuario por email + rol (entra con Google) |
-| PATCH | `/api/admin/users/{id}/role` | Admin | Cambiar rol admin/invitado |
-| PUT | `/api/admin/users/{id}` | Admin | Renombrar alias |
-| PATCH | `/api/admin/users/{id}/table` | Admin | Asignar/quitar mesa |
-| DELETE | `/api/admin/users/{id}?delete_photos=false` | Admin | Borrar usuario; `false` anonimiza sus fotos (galería+retos), `true` las elimina con sus archivos |
-
----
-
-## Reglas de negocio clave
-
-- Los invitados **no necesitan login** — se identifican por UUID en localStorage
-- El **UUID lo genera el servidor** (`uuid4` aleatorio), se guarda en DB y se devuelve al cliente
-- Google OAuth permite **recuperar identidad** entre dispositivos; al vincularse, el alias se reemplaza por el nombre de Google y se muestra su foto de perfil
-- **Avatares de Google** (`lh3.googleusercontent.com`): responden **429** cuando el `Referer` de la petición es un origen HTTP inseguro (localhost/IP LAN). La app fija `<meta name="referrer" content="no-referrer">` en `index.html` para que las imágenes de perfil carguen en dev/LAN (y de igual forma en producción)
-- Solo imágenes (validación por **MIME type real** inspeccionando bytes + extensión) — **todos los formatos** (HEIC/HEIF de iPhone incluidos: se convierten a JPEG al subir con `exif_transpose`, el original no se guarda), máx **25 MB**
-- Nombres de archivo con **UUID** para evitar colisiones
-- **Miniatura con caja máxima 150×150px** (aspect ratio preservado, `exif_transpose` aplicado)
-- **Paginación infinita** con offset/limit
-- **Descarga múltiple por selección** (galería, tab Galería del admin y dashboard de retos): el modo se activa **manteniendo presionada** una foto (queda seleccionada) y se desactiva al quedarse sin selección → diálogo **ZIP único** (máx. 100 fotos; se arma en archivo temporal con `ZIP_STORED` y se borra tras enviarse) o **archivos individuales** (sin límite; el navegador puede pedir confirmación para descargas múltiples)
-- **Guardar en Google Drive** (opcional, en el mismo diálogo de selección): solo para usuarios con Google vinculado; la primera vez pide consentimiento incremental **`drive.file`** (`/api/google?user_id=X&drive=1`, `access_type=offline` + `prompt=consent`) y guarda el **refresh token** en `users.google_refresh_token`. El backend sube las fotos seleccionadas a la carpeta `Fotos Boda {novio1} y {novio2}` (galería) o a `Fotografo-Secreto/Mesa-XX` (retos, replica la estructura de disco), **omite duplicados** por nombre de archivo y usa un rate limit propio (`DRIVE_RATE_LIMIT_PER_MINUTE`, 60/min). El guardado corre **en segundo plano** (`POST /api/drive/save-batch` inicia un job que sube en paralelo con `DRIVE_UPLOAD_CONCURRENCY`; el frontend sondea `GET /api/drive/job/{job_id}` y avisa con **toasts** al terminar, aunque el usuario cierre el diálogo; los jobs se persisten en `localStorage` y se reanuda el sondeo al recargar). Si Google invalida el token, se limpia en BD y el toast ofrece **reautorizar**. El scope `drive.file` es **no sensible**: no requiere verificación de Google, pero la OAuth consent screen debe estar **"En producción"** (en "Prueba" los refresh tokens caducan a los 7 días)
-- **15 subidas/minuto** por usuario (rate limit) — también en retos
-- Las fotos se sirven **a través de FastAPI** (sin autenticación para visualizar)
-- Mensaje opcional (150 caracteres) en galería **y** en fotos de retos
-- Fotógrafo Secreto: **1 foto/usuario/reto** (UniqueConstraint `challenge_id+user_id`), máx = nº participantes de la mesa
-- Un usuario se asigna a una **mesa una sola vez** (campo `table_id` en User)
-- Los retos se bloquean al alcanzar el nº de participantes; admin puede desbloquear para editar/eliminar
-- Cada participante ve **solo su propia foto** por reto; los espectadores ven **todas** en el dashboard público
-- Dashboard público **en vivo sin login** (EventSource propio); confetti + resaltado al elegir ganador
-- Admin puede **seleccionar y deseleccionar** el ganador; se notifica por SSE
-- **Admin**: los administradores son `User` con `role='admin'` (sin modelo `Admin`): al arranque se hace upsert de `ADMIN_EMAIL`, `NOVIO_EMAIL` y `NOVIA_EMAIL` desde `.env`, cada uno con su password (`ADMIN_PASSWORD`/`NOVIO_PASSWORD`/`NOVIA_PASSWORD`). Además, desde el panel admin se pueden **pre-crear usuarios por email** (`POST /api/admin/users`, con rol admin o guest) y **cambiar el rol** de cualquier usuario (`PATCH /api/admin/users/{id}/role`); al entrar con Google, el callback detecta el email y aplica el rol. Login por password (`POST /api/admin/login`) o Google OAuth; un Google login con correo admin **fusiona** automáticamente la identidad previa de invitado (fotos + mesa) en la cuenta admin
-- `Miniaturas/` replica exactamente la estructura de `Fotos/`
-- **Limpieza de archivos huérfanos** cada 10s (`ORPHAN_CLEANUP_INTERVAL`)
-- **SQLite con WAL mode** para concurrencia; sin backups automáticos
-- Al borrar un usuario, sus fotos pueden **quedar anónimas** (`user_id=NULL`, visibles como "Anónimo") o **eliminarse** con sus archivos (SSE incluido)
-
----
-
-## Variables de entorno (`.env`)
-
-El archivo `.env` de la raíz (no versionado) es la **única fuente de configuración**. `.env.example` fue **eliminado del repo** (no se usa en ningún punto del código).
-
-**Carga**: fuera de Docker, `Settings` (`backend/app/config.py`) lee `env_file` del **`.env` raíz** (archivo faltante se ignora). En contenedores, el `.env` **no se monta**: cada `docker-compose` reinyecta en el contenedor **solo las variables que necesita cada servicio** vía `environment:` interpoladas desde el `.env` raíz (`.env` → Compose → env vars del contenedor). Las variables de entorno reales tienen prioridad sobre los dotenv; `extra="ignore"` tolera claves desconocidas.
-
-| Variable | Uso |
-|---|---|
-| `ADMIN_EMAIL` | Email del admin inicial (OAuth + login por contraseña) |
-| `ADMIN_PASSWORD` | Password del admin principal |
-| `NOVIO_EMAIL` / `NOVIO_PASSWORD` | Email+password del segundo admin (el novio) |
-| `NOVIA_EMAIL` / `NOVIA_PASSWORD` | Email+password del tercer admin (la novia) |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
-| `SECRET_KEY` | Clave para session cookies |
-
-`is_admin_email()` acepta `ADMIN_EMAIL`, `NOVIO_EMAIL` y `NOVIA_EMAIL`; `get_admin_password(email)` devuelve la password de cada uno (fallback a `ADMIN_PASSWORD`). Además, un usuario con `role='admin'` en la tabla `users` es admin aunque su email no esté en el `.env` (los 3 del `.env` se reafirman como admin en cada arranque).
-
-Opcionales (defaults en `Settings`): `ORPHAN_CLEANUP_INTERVAL=10`, `FRONTEND_URL=http://localhost:5173`, `CORS_ALLOWED_ORIGINS=` (CSV de orígenes extra para CORS, p.ej. `http://10.0.0.4:5173` en LAN), `MAX_UPLOAD_SIZE=25`, `RATE_LIMIT_PER_MINUTE=15`, `DRIVE_RATE_LIMIT_PER_MINUTE=60`, `DRIVE_UPLOAD_CONCURRENCY=4`, `DATABASE_URL`, `UPLOAD_DIR=Fotos`, `THUMBNAILS_DIR=Miniaturas`.
-
-El **frontend** recibe `VITE_PROXY_TARGET` (target del proxy `/api` de Vite; en Docker `http://backend:8000`, por defecto en dev local `http://localhost:8000`). No hay `.env` de frontend: la API es relativa (`import.meta.env.VITE_API_URL || ''`).
-
-> **Google OAuth**: el `redirect_uri` se construye desde `FRONTEND_URL` (única), y **Google solo acepta `localhost` o dominios públicos** — una IP privada (p.ej. `10.0.0.4`) no se puede registrar en la consola. Por eso en LAN `FRONTEND_URL=http://localhost:5173` y los dispositivos móviles que entran por IP dependen de `CORS_ALLOWED_ORIGINS` para la API (el login con Google desde el móvil solo funciona por dominio público). Tras el login, el backend redirige a `FRONTEND_URL/?google_user={id}` y el frontend recupera la identidad.
->
-> **Google Drive (opcional)**: requiere en la consola de Google Cloud (1) habilitar la **Google Drive API** y (2) declarar el scope `https://www.googleapis.com/auth/drive.file` en la pantalla de consentimiento (Acceso a datos). Es un scope **no sensible** → no pasa por verificación de Google, pero la app debe estar **"En producción"** (publicar la app; en "Prueba" solo autorizan test users y los refresh tokens expiran a los 7 días). No hace falta añadir JavaScript origins (todo pasa por el backend).
-
----
-
-## Puesta en marcha
-
-- **Desarrollo (LAN):** `docker compose -f docker-compose.dev.yml up --build` levanta backend y frontend desde el código fuente (`Dockerfile.dev`). El frontend usa **API relativa**: Vite proxya `/api/*` al backend `http://backend:8000` (env `VITE_PROXY_TARGET`), por lo que la misma web funciona en `localhost` y en cualquier IP/Máquina de la red (`FRONTEND_URL` controla CORS y redirects OAuth).
-- Host LAN: backend publicado en **`localhost:8001`** (→ contenedor `:8000`), frontend en `0.0.0.0:5173` (accesible desde otros dispositivos vía `http://<IP>:5173`). Vite acepta cualquier Host (`allowedHosts`).
-- **Despliegue (imágenes GHCR):** el workflow `cd.yml` publica en cada push a `master` (y tag `v*`) las imágenes `ghcr.io/juniornff/wedding-photo-manager-backend|-frontend` con tags `latest` + `sha-…` (+ versión desde tags `vX.Y.Z`), solo si los tests pasan. Donde se vaya a levantar: `docker login ghcr.io` (PAT con `read:packages`) y `docker compose up -d` — el `docker-compose.yml` (por defecto) solo hace **pull** de esas imágenes (frontend en `:8080`, con nginx de producción: SPA + proxy `/api` y SSE sin buffering). Versiones: `TAG=latest` en `.env` o `TAG=<sha|X.Y.Z>` para rollback.
-- **Páginas legales OAuth** (`/privacidad` y `/terminos`, públicas y con los nombres de los novios vía `GET /api/wedding-info`): Google las exige (Política de Privacidad y Condiciones, enlazadas desde la homepage) en el OAuth consent screen de apps que usan OAuth. Registrar en la consola de Google las URLs `https://boda.nehemiasfeliz.com/privacidad` y `.../terminos`
-- Para correr el backend local fuera de Docker: `uvicorn app.main:app --reload --app-dir backend` desde la raíz del repo (el `.env` raíz se lee por ruta absoluta; `Fotos/`, `Miniaturas/` y `data/` se crean relativos al CWD).
-- Dev frontend: `npm run dev` en `frontend/` (Vite proxya `/api` → `VITE_PROXY_TARGET` o `http://localhost:8000` por defecto).
-
----
-
-## Tests
-
-| Suite | Comando | Alcance |
+| Suite | Command | Coverage |
 |---|---|---|
-| Backend | `cd backend && python -m pytest -q` (174) | servicios (validación/miniaturas/HEIC/ZIP/rate-limit, auth, SSE), APIs (galería, auth+guards, admin, fotógrafo secreto), Drive (refresh/dedupe/lotes/endpoints) y migraciones del lifespan |
-| Frontend | `cd frontend && npm test` (77) | `utils`/`api`/hooks (`usePhotoSelection`, `useLongPress`) y componentes (`SelectionToolbar`, `DownloadDialog`, `PhotoUpload`, `Toaster`) |
-| Lint/build | `npm run lint` · `npm run build` | oxlint + build de producción |
+| Backend (174) | `cd backend && python -m pytest -q` | Services (validation/thumbnails/HEIC/ZIP/rate-limit), APIs (gallery, auth, admin, secret photographer), Drive and migrations |
+| Frontend (77) | `cd frontend && npm test` | utils/api, hooks (`usePhotoSelection`, `useLongPress`) and components |
+| Lint/build | `npm run lint` · `npm run build` | oxlint + production build |
 
-- La suite de backend es **autocontenida**: `tests/conftest.py` fija BD/carpetas temporales y credenciales falsas antes de importar la app (no requiere `.env` ni toca `data/`, `Fotos/` ni `Miniaturas/` reales).
-- **CI** (`.github/workflows/ci.yml`): en cada PR a `master`/`main` y push a `test/**` corren en paralelo pytest (Python 3.13) y lint+test+build del frontend (Node 20).
-- **CD** (`.github/workflows/cd.yml`): en cada push a `master` o tag `v*` corre los mismos tests y, si pasan, construye y publica las imágenes Docker en GHCR (tags `latest`, `sha-…` y versión semver).
+- The backend suite is **self-contained**: no `.env` needed and real data is never touched (temp DB/folders). Details in [`tests.md`](tests.md).
+- **CI** (`.github/workflows/ci.yml`): PRs to `master`/`main` and pushes to `test/**` → pytest (Python 3.13) + lint/test/build (Node 20).
+- **CD** (`.github/workflows/cd.yml`): push to `master` or a `v*` tag → same tests (gating) + build/push of the images to GHCR (`latest`, `sha-…`, semver).
 
----
+## Technical decisions
 
-## Decisiones técnicas adoptadas
-
-| Aspecto | Decisión |
+| Aspect | Decision |
 |---|---|
-| Gestión de estado | React Context |
-| Cliente HTTP | `fetch` nativo + helpers `api()`/`apiUpload()`/`apiBlob()` |
-| Paginación | offset/limit |
-| Procesamiento de imágenes | Pillow (Python) |
+| State management | React Context |
+| HTTP client | Native `fetch` + `api()`/`apiUpload()`/`apiBlob()` helpers |
+| Pagination | offset/limit |
+| Image processing | Pillow (Python) |
 | OAuth | Authlib |
-| Google Drive | REST v3 con `httpx` (refresh token por usuario + scope no sensible `drive.file`; sin SDK de Google) |
-| Generación de QR | `qrcode` (Python) |
-| Migraciones BD | `Base.metadata.create_all()` + `ALTER TABLE` manuales en el lifespan (sin Alembic) |
+| Google Drive | REST v3 via `httpx` (no SDK) |
+| QR codes | `qrcode` (Python) |
+| DB migrations | `create_all` + hand-written `ALTER TABLE` in the lifespan (no Alembic) |
 | Config | pydantic-settings |
-| Tiempo real | SSE (`new_photo`, `new_challenge_photo`, `challenge_photo_deleted`, `gallery_photo_deleted`, `carousel_updated`, `info_updated`, `winner_selected`) |
-| Visualización de fotos | Componente compartido `PhotoLightbox` (lightbox + descarga, opcional eliminar) |
-| Entorno dev | `docker compose -f docker-compose.dev.yml up --build` |
-| Entorno despliegue | `docker compose up -d` (pull de imágenes GHCR) |
-| Python | Última versión estable |
-| Node | Última versión estable |
+| Realtime | SSE (7 named events) |
+| Lightbox | Shared `PhotoLightbox` component |
+| Versioning | `vX.Y.Z` tags → versioned GHCR images (rollback via `TAG`) |
+
+## Project structure
+
+```
+wedding-photo-manager/
+├── backend/                  # FastAPI (app/, tests/, Dockerfile)
+│   └── app/
+│       ├── routers/          # main, auth, fotografo_secreto, admin, drive, sse
+│       ├── services/         # photo_service, drive_service, auth_service, sse_manager…
+│       ├── models/  schemas/ # SQLAlchemy models + pydantic schemas
+│       └── main.py           # app, lifespan (migrations), static mounts
+├── frontend/                 # React + Vite (src/, Dockerfile, Dockerfile.dev, nginx.conf.template)
+├── docs/screenshots/         # Screenshots used in this README
+├── .github/workflows/        # ci.yml (tests) + cd.yml (GHCR images)
+├── docker-compose.yml        # Deployment: pulls GHCR images
+├── docker-compose.dev.yml    # Development: builds from source
+├── tests.md                  # Test-suite guide (Spanish)
+├── AGENTS.md                 # Guide for AI coding agents
+└── README.es.md              # Spanish version of this README
+```
+
+At runtime `Fotos/`, `Miniaturas/` and `data/` are created (git-ignored).
+
+## Contributing
+
+Contributions are welcome!
+
+1. Open an **issue** to discuss the change (bugs, ideas, questions).
+2. **Fork** the repo and create a branch (`feature/...` or `test/...`).
+3. Make sure everything is green before the PR:
+   ```bash
+   (cd backend && python -m pytest -q) && (cd frontend && npm test && npm run lint)
+   ```
+4. Open a **PR against `master`**; CI must pass.
+5. If behavior changes, keep `README.md`, `README.es.md` and `tests.md` in sync.
+
+Commit messages: short and descriptive.
+
+## License
+
+Released under the [MIT License](LICENSE).
+
+## Author
+
+[@juniornff](https://github.com/juniornff)

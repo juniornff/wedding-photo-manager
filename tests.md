@@ -11,7 +11,7 @@ La suite tiene dos mitades, cada una con su herramienta:
 | Backend (`backend/tests/`) | **pytest** (+ pytest-asyncio, respx) | Servicios, endpoints, migraciones | **174** |
 | Frontend (`frontend/src/`) | **Vitest** (+ Testing Library, jsdom) | Utilidades, hooks, componentes | **77** |
 
-**Total: 250 tests.** No requieren `.env` ni levantar el stack (ver [Cómo funcionan](#cómo-funcionan)).
+**Total: 251 tests.** No requieren `.env` ni levantar el stack (ver [Cómo funcionan](#cómo-funcionan)).
 
 ---
 
@@ -115,7 +115,7 @@ La suite **nunca toca** `data/wedding.db`, `Fotos/`, `Miniaturas/` ni el `.env` 
 | `test_auth_service.py` | 8 | PBKDF2 roundtrip, hash legacy/malformados, `init_admin`/`init_wedding_info` idempotentes |
 | `test_migrations.py` | 7 | `_ensure_user_roles` (columnas+índice+borrado de placeholders), `_ensure_nullable_user_id` (reconstrucción de tablas), lifespan completo sobre esquema viejo |
 | `test_sse_manager.py` | 5 | Registro/broadcast/unregister/evicción por cola llena |
-| `test_smoke.py` | 5 | Arrepentimiento rápido: wedding-info, `/api/admin/me` 201/401, galería vacía |
+| `test_smoke.py` | 6 | Arrepentimiento rápido: health, wedding-info, `/api/admin/me` 201/401, galería vacía |
 
 ### Frontend (`frontend/src/`) — 77
 
