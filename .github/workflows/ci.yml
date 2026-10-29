@@ -1,8 +1,10 @@
 name: CI
 
+# Solo PRs y ramas de experimentación: los pushes a master/tags los cubre cd.yml
+# (tests + publicación de imágenes), para no correr la suite dos veces.
 on:
   push:
-    branches: [master, main, 'test/**']
+    branches: ['test/**']
   pull_request:
     branches: [master, main]
 
