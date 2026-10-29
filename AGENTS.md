@@ -1,7 +1,7 @@
 # AGENTS.md — Wedding Photo Manager
 
 ## Project status
-Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. Run dev with `docker compose -f docker-compose.dev.yml up` (backend :8001→:8000 in container, frontend exposed on host :5173); deploy with `docker compose up -d` (pull de imágenes GHCR). `README.md` (inglés) y `README.es.md` (español) son la referencia canónica de arquitectura (diagramas Mermaid ER/use-case/sequence/state/component).
+Functional. Backend (FastAPI async) + Frontend (React/Vite) built and verified. Run dev with `docker compose -f docker-compose.dev.yml up` (backend :8001→:8000 in container, frontend exposed on host :5173); deploy with `docker compose up -d` (pull de imágenes GHCR). `ARCHITECTURE.md` (inglés) y `ARCHITECTURE.es.md` (español) son la referencia canónica de arquitectura (los 12 diagramas Mermaid ER/use-case/sequence/state/component + API/reglas/decisiones); `README.md` / `README.es.md` son la guía pública del repo (features, quickstart, config, tests/CI) y enlazan a los ARCHITECTURE.
 
 ## Commands
 - **Run stack (dev):** `docker compose -f docker-compose.dev.yml up` — mounts root `Fotos/`, `Miniaturas/` and `data/` into the backend container. Use `docker compose -f docker-compose.dev.yml up -d` after changing `.env` (no need to rebuild for `.env` changes: Compose injects env vars at container start)
@@ -120,7 +120,7 @@ Contextos divididos en 3 archivos cada uno (patrón canónico fast-refresh; lint
 - `context/SSEContext.js` (`createContext`) + `context/SSEProvider.jsx` (`SSEProvider` component) + `context/useSSE.jsx` (`useSSE` hook)
 
 ## Database entities
-Canonical ER diagram in `README.md`. Summary: **User** (anonymous uuid+alias or Google-authenticated; `table_id` set once; `google_name`, `google_photo`, `google_refresh_token` para Drive; administradores con `email`+`password_hash`+`role='admin'`), **WeddingInfo** (couple names, date, color scheme, `winner_table_id`, `carousel_interval`), **CarouselPhoto**, **GalleryPhoto**, **Table** (unique QR links), **Challenge** (retos por mesa, cantidad libre, `locked` flag), **ChallengePhoto** (1/user/reto, `message` field, `UniqueConstraint(challenge_id, user_id)`).
+Canonical ER diagram in `ARCHITECTURE.md`. Summary: **User** (anonymous uuid+alias or Google-authenticated; `table_id` set once; `google_name`, `google_photo`, `google_refresh_token` para Drive; administradores con `email`+`password_hash`+`role='admin'`), **WeddingInfo** (couple names, date, color scheme, `winner_table_id`, `carousel_interval`), **CarouselPhoto**, **GalleryPhoto**, **Table** (unique QR links), **Challenge** (retos por mesa, cantidad libre, `locked` flag), **ChallengePhoto** (1/user/reto, `message` field, `UniqueConstraint(challenge_id, user_id)`).
 
 ## Testing suite (convenciones)
 - **Backend** (`backend/tests/`): `conftest.py` (fixtures + aislamiento), `helpers.py` (constantes/factories), `test_smoke`, `test_photo_service`, `test_auth_service`, `test_sse_manager`, `test_main_api`, `test_auth_api`, `test_admin_api`, `test_secret_photographer`, `test_drive`, `test_migrations`
@@ -130,5 +130,5 @@ Canonical ER diagram in `README.md`. Summary: **User** (anonymous uuid+alias or 
 - **Frontend** (`frontend/src/`): tests junto al archivo (`*.test.js`/`*.jsx`); imports explícitos de `vitest` (sin globals, para que oxlint no queje); mocks de `../api`/`../context/useAuth`/`../driveJobs` con `vi.mock`; el long-press de selección debe probarse como lo usa la UI real (`enter()` + `toggle(id)` en el **mismo** `act`)
 
 
-- `README.md` (inglés) / `README.es.md` (español) son la referencia canónica de arquitectura con diagramas Mermaid
+- `ARCHITECTURE.md` (inglés) / `ARCHITECTURE.es.md` (español) son la referencia canónica de arquitectura con diagramas Mermaid; los READMEs enlazan a ellos desde su sección Documentation/Documentación
 - This file (AGENTS.md) is the quick-start for new agent sessions
