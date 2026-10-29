@@ -1,6 +1,10 @@
 __pycache__/
 *.py[cod]
 .venv/
+.pytest_cache/
+tests/
+pytest.ini
+requirements-dev.txt
 Fotos/
 Miniaturas/
 data/

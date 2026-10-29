@@ -1,9 +1,11 @@
+# Despliegue: baja las imágenes publicadas en GHCR por el workflow cd.yml.
+# Requiere: docker login ghcr.io (PAT con read:packages) y un .env raíz.
+# Versiones: TAG=latest (default) o TAG=<sha-x.y.z> para rollback (TAG se lee del .env).
 services:
   backend:
     container_name: wedding-photo-manager-backend
-    build: ./backend
-    ports:
-      - "8001:8000"
+    image: ghcr.io/juniornff/wedding-photo-manager-backend:${TAG:-latest}
+    restart: unless-stopped
     volumes:
       - ./Fotos:/app/Fotos
       - ./Miniaturas:/app/Miniaturas
@@ -24,10 +26,12 @@ services:
 
   frontend:
     container_name: wedding-photo-manager-frontend
-    build: ./frontend
-    environment:
-      - VITE_PROXY_TARGET=${VITE_PROXY_TARGET}
+    image: ghcr.io/juniornff/wedding-photo-manager-frontend:${TAG:-latest}
+    restart: unless-stopped
     ports:
-      - "5173:5173"
+      - "8080:80"
+    environment:
+      - BACKEND_URL=http://backend:8000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy

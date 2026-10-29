@@ -1,0 +1,50 @@
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Límite de subida: la app acepta hasta 25 MB
+    client_max_body_size 30m;
+
+    # Health del stack completo (nginx → backend), igual que el del propio backend
+    location = /health {
+        proxy_pass ${BACKEND_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+
+    # API backend — ^~ evita que el regex de assets capture /api/*
+    # SSE (/api/events): sin buffering, sin cache y timeouts largos
+    location ^~ /api/ {
+        proxy_pass ${BACKEND_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 3600s;
+        proxy_read_timeout 3600s;
+    }
+
+    # Assets con hash (build de Vite): caché larga
+    location ~* \.(?:js|css|woff2?|ttf|png|jpe?g|gif|webp|avif|svg|ico)$ {
+        expires 30d;
+        add_header Cache-Control "public";
+        try_files $uri =404;
+    }
+
+    # SPA (React Router): cualquier ruta sirve index.html
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+    }
+}

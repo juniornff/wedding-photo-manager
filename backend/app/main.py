@@ -204,6 +204,12 @@ app.include_router(admin_router)
 app.include_router(drive_router)
 app.include_router(sse_router)
 
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 # Montajes estáticos (las carpetas deben existir antes de montar StaticFiles)
 Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 Path(settings.THUMBNAILS_DIR).mkdir(parents=True, exist_ok=True)
