@@ -90,10 +90,9 @@ Open **http://localhost:5173** (backend also exposed on `localhost:8001`). Best 
 
 ### Option B — pre-built images (production)
 
-Images are published to GitHub Container Registry on every push to `master` (`ghcr.io/juniornff/wedding-photo-manager-backend|-frontend`). Being private, they require authentication first:
+Images are published to GitHub Container Registry on every push to `master` (`ghcr.io/juniornff/wedding-photo-manager-backend|-frontend`). The packages are public, so no login is needed:
 
 ```bash
-docker login ghcr.io          # username + PAT with read:packages
 docker compose up -d          # pull only, no build
 ```
 
